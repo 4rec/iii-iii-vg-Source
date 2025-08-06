@@ -280,6 +280,8 @@
             justify-content: space-between;
             margin: 25px 0;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         
         .pagination {
@@ -295,6 +297,8 @@
             cursor: pointer;
             border-radius: 6px;
             transition: all 0.3s ease;
+            min-width: 36px;
+            text-align: center;
         }
         
         .page-btn:hover {
@@ -305,6 +309,17 @@
             background: var(--accent-blue);
             color: white;
             border-color: var(--accent-blue);
+        }
+        
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .toggle-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
         
         .toggle-btn {
@@ -391,6 +406,11 @@
             text-decoration: none;
             font-weight: 500;
         }
+        
+        .toggle-label {
+            font-size: 14px;
+            color: var(--text-light);
+        }
     </style>
 </head>
 <body>
@@ -429,7 +449,7 @@
                 <h3>Geolocation History Summary</h3>
                 <div class="summary-item"><strong>IP:</strong> <span id="summary-ip"></span></div>
                 <div class="summary-item"><strong>Current Country:</strong> <span id="summary-country"></span></div>
-                <div class="summary-item"><strong>Country Changes:</strong> <span id="summary-changes"></span></div>
+                <div class="summary-item"><strong>Location Changes:</strong> <span id="summary-changes"></span></div>
                 <div class="summary-item"><strong>First Seen:</strong> <span id="summary-first"></span></div>
                 <div class="summary-item"><strong>Last Seen:</strong> <span id="summary-last"></span></div>
             </div>
@@ -438,7 +458,11 @@
             <div id="timeline" class="timeline"></div>
 
             <div class="controls">
-                <button id="toggle-changes" class="toggle-btn">Show All Records</button>
+                <div class="toggle-container">
+                    <span class="toggle-label">View:</span>
+                    <button id="toggle-changes" class="toggle-btn">Show All Records</button>
+                    <button id="toggle-city-changes" class="toggle-btn">Track City Changes</button>
+                </div>
                 <div class="pagination" id="pagination"></div>
             </div>
 
@@ -470,9 +494,12 @@
         let currentPage = 1;
         const recordsPerPage = 10;
         let showOnlyChanges = false;
+        let trackCityChanges = false;
+        let totalPages = 1;
 
         document.getElementById('lookup-btn').addEventListener('click', lookupIPHistory);
         document.getElementById('toggle-changes').addEventListener('click', toggleChangesView);
+        document.getElementById('toggle-city-changes').addEventListener('click', toggleCityChangesView);
 
         async function fetchDatabaseDates() {
             try {
@@ -591,17 +618,33 @@
 
         function markChangesInResults(results) {
             let lastCountryCode = null;
+            let lastCity = null;
             let lastAsn = null;
             
             results.forEach(result => {
                 const currentCountryCode = result.data.country?.iso_code || null;
+                const currentCity = result.data.city?.name || null;
                 const currentAsn = result.data.asn?.number || null;
                 
-                // Mark as change if country or ASN changed
-                result.isChange = (currentCountryCode !== lastCountryCode) || (currentAsn !== lastAsn);
+                // Determine if this is a change based on current settings
+                let isChange = false;
+                
+                if (trackCityChanges) {
+                    // Track both country and city changes
+                    isChange = (currentCountryCode !== lastCountryCode) || 
+                              (currentCity !== lastCity) || 
+                              (currentAsn !== lastAsn);
+                } else {
+                    // Track only country and ASN changes
+                    isChange = (currentCountryCode !== lastCountryCode) || 
+                              (currentAsn !== lastAsn);
+                }
+                
+                result.isChange = isChange;
                 
                 // Update last values
                 lastCountryCode = currentCountryCode;
+                lastCity = currentCity;
                 lastAsn = currentAsn;
             });
         }
@@ -614,16 +657,25 @@
             document.getElementById('summary-country').innerHTML = 
                 `${getFlagEmoji(latestResult.iso_code)} ${latestResult.name} (${latestResult.iso_code})`;
             
-            // Calculate country changes
+            // Calculate changes
             const changes = results.filter(r => r.isChange).length - 1; // Subtract initial record
             const uniqueCountries = new Set(results.map(r => r.data.country.iso_code));
             
-            document.getElementById('summary-changes').textContent = `${changes} changes between ${uniqueCountries.size} countries`;
+            if (trackCityChanges) {
+                const uniqueCities = new Set(results.filter(r => r.data.city?.name).map(r => r.data.city.name));
+                document.getElementById('summary-changes').textContent = 
+                    `${changes} changes between ${uniqueCountries.size} countries and ${uniqueCities.size} cities`;
+            } else {
+                document.getElementById('summary-changes').textContent = 
+                    `${changes} changes between ${uniqueCountries.size} countries`;
+            }
+            
             document.getElementById('summary-first').textContent = results[results.length - 1].date;
             document.getElementById('summary-last').textContent = results[0].date;
 
             // Create timeline
             const timeline = document.getElementById('timeline');
+            timeline.innerHTML = '';
             
             // Find all change points
             const changePoints = results.filter(r => r.isChange);
@@ -645,13 +697,19 @@
                 label.textContent = point.date;
                 timeline.appendChild(label);
                 
-                // Country flag emoji
-                const flag = document.createElement('div');
-                flag.className = 'timeline-label';
-                flag.style.left = `${position}%`;
-                flag.style.top = '-25px';
-                flag.innerHTML = `${getFlagEmoji(point.data.country.iso_code)} ${point.data.country.iso_code}`;
-                timeline.appendChild(flag);
+                // Location label
+                const location = document.createElement('div');
+                location.className = 'timeline-label';
+                location.style.left = `${position}%`;
+                location.style.top = '-25px';
+                
+                let locationText = `${getFlagEmoji(point.data.country.iso_code)} ${point.data.country.iso_code}`;
+                if (trackCityChanges && point.data.city?.name) {
+                    locationText += ` (${point.data.city.name})`;
+                }
+                
+                location.innerHTML = locationText;
+                timeline.appendChild(location);
             });
         }
 
@@ -685,11 +743,11 @@
                 row.appendChild(countryCell);
                 
                 const cityCell = document.createElement('td');
-                cityCell.textContent = result.data.city.name || 'Unknown';
+                cityCell.textContent = result.data.city?.name || 'Unknown';
                 row.appendChild(cityCell);
                 
                 const coordsCell = document.createElement('td');
-                if (result.data.city.latitude && result.data.city.longitude) {
+                if (result.data.city?.latitude && result.data.city?.longitude) {
                     coordsCell.textContent = `${result.data.city.latitude.toFixed(4)}, ${result.data.city.longitude.toFixed(4)}`;
                 } else {
                     coordsCell.textContent = 'Unknown';
@@ -716,11 +774,27 @@
                 ? allResults.filter(r => r.isChange) 
                 : [...allResults];
             
-            const totalPages = Math.ceil(displayResults.length / recordsPerPage);
+            totalPages = Math.ceil(displayResults.length / recordsPerPage);
             
-            // Previous button
+            if (totalPages <= 1) return;
+            
+            // First page button (<<)
+            const firstBtn = document.createElement('button');
+            firstBtn.innerHTML = '&laquo;';
+            firstBtn.className = 'page-btn';
+            firstBtn.disabled = currentPage === 1;
+            firstBtn.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage = 1;
+                    renderTable();
+                    updatePagination();
+                }
+            });
+            pagination.appendChild(firstBtn);
+            
+            // Previous page button (<)
             const prevBtn = document.createElement('button');
-            prevBtn.textContent = '←';
+            prevBtn.innerHTML = '&lsaquo;';
             prevBtn.className = 'page-btn';
             prevBtn.disabled = currentPage === 1;
             prevBtn.addEventListener('click', () => {
@@ -732,8 +806,11 @@
             });
             pagination.appendChild(prevBtn);
             
-            // Page buttons
-            for (let i = 1; i <= totalPages; i++) {
+            // Current page and surrounding pages
+            const startPage = Math.max(1, currentPage - 1);
+            const endPage = Math.min(totalPages, currentPage + 1);
+            
+            for (let i = startPage; i <= endPage; i++) {
                 const pageBtn = document.createElement('button');
                 pageBtn.textContent = i;
                 pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
@@ -745,9 +822,9 @@
                 pagination.appendChild(pageBtn);
             }
             
-            // Next button
+            // Next page button (>)
             const nextBtn = document.createElement('button');
-            nextBtn.textContent = '→';
+            nextBtn.innerHTML = '&rsaquo;';
             nextBtn.className = 'page-btn';
             nextBtn.disabled = currentPage === totalPages;
             nextBtn.addEventListener('click', () => {
@@ -758,6 +835,20 @@
                 }
             });
             pagination.appendChild(nextBtn);
+            
+            // Last page button (>>)
+            const lastBtn = document.createElement('button');
+            lastBtn.innerHTML = '&raquo;';
+            lastBtn.className = 'page-btn';
+            lastBtn.disabled = currentPage === totalPages;
+            lastBtn.addEventListener('click', () => {
+                if (currentPage < totalPages) {
+                    currentPage = totalPages;
+                    renderTable();
+                    updatePagination();
+                }
+            });
+            pagination.appendChild(lastBtn);
         }
 
         function toggleChangesView() {
@@ -765,6 +856,24 @@
             const toggleBtn = document.getElementById('toggle-changes');
             toggleBtn.textContent = showOnlyChanges ? 'Show All Records' : 'Show Only Changes';
             toggleBtn.classList.toggle('active', showOnlyChanges);
+            
+            currentPage = 1; // Reset to first page
+            renderTable();
+            updatePagination();
+        }
+
+        function toggleCityChangesView() {
+            trackCityChanges = !trackCityChanges;
+            const toggleBtn = document.getElementById('toggle-city-changes');
+            toggleBtn.textContent = trackCityChanges ? 'Tracking City Changes' : 'Track City Changes';
+            toggleBtn.classList.toggle('active', trackCityChanges);
+            
+            // Re-mark changes with new setting
+            markChangesInResults(allResults);
+            
+            // Update display
+            const ipAddress = document.getElementById('ip-input').value.trim();
+            displayResults(ipAddress, allResults);
             
             currentPage = 1; // Reset to first page
             renderTable();
