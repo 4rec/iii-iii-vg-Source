@@ -496,6 +496,9 @@
         let showOnlyChanges = false;
         let trackCityChanges = false;
         let totalPages = 1;
+        const cache = new Map();
+        const CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour cache
+        const MAX_CONCURRENT_REQUESTS = 20; // Adjust based on your server capacity
 
         document.getElementById('lookup-btn').addEventListener('click', lookupIPHistory);
         document.getElementById('toggle-changes').addEventListener('click', toggleChangesView);
@@ -554,6 +557,18 @@
                     throw new Error("Invalid IP address format");
                 }
 
+                // Check cache first
+                const cachedData = cache.get(ipAddress);
+                if (cachedData && (Date.now() - cachedData.timestamp) < CACHE_EXPIRY) {
+                    allResults = cachedData.results;
+                    displayResults(ipAddress, allResults);
+                    updatePagination();
+                    renderTable();
+                    resultsContainer.style.display = 'block';
+                    loading.style.display = 'none';
+                    return;
+                }
+
                 // Clear previous results
                 document.getElementById('results-table').innerHTML = '';
                 document.getElementById('timeline').innerHTML = '';
@@ -563,35 +578,31 @@
                 const databaseDates = await fetchDatabaseDates();
                 const totalDates = databaseDates.length;
                 
-                // Fetch data for all dates
-                const results = [];
-                let processed = 0;
-                
-                for (const date of databaseDates) {
-                    try {
-                        const url = `https://maxmind.api.iii.vg/?ip=${ipAddress}&database=${date}`;
-                        const response = await fetch(url);
-                        
-                        if (!response.ok) {
-                            console.error(`Failed to fetch data for ${date}`);
-                            continue;
-                        }
+                // Create array of promises for all dates
+                const fetchPromises = databaseDates.map(date => 
+                    fetch(`https://maxmind.api.iii.vg/?ip=${ipAddress}&database=${date}`)
+                        .then(response => {
+                            if (!response.ok) throw new Error(`Failed for ${date}`);
+                            return response.json();
+                        })
+                        .then(data => ({ date, data, isChange: false }))
+                        .catch(err => {
+                            console.error(`Error for ${date}:`, err);
+                            return null; // Return null for failed requests
+                        })
+                );
 
-                        const data = await response.json();
-                        results.push({
-                            date,
-                            data,
-                            isChange: false // Will be set later
-                        });
-                        
-                        // Update progress
-                        processed++;
-                        const progress = (processed / totalDates) * 100;
-                        updateProgress(progress);
-                        
-                    } catch (err) {
-                        console.error(`Error fetching data for ${date}:`, err);
-                    }
+                // Process in batches to avoid overwhelming the browser
+                const batchSize = MAX_CONCURRENT_REQUESTS;
+                const results = [];
+                
+                for (let i = 0; i < fetchPromises.length; i += batchSize) {
+                    const batch = fetchPromises.slice(i, i + batchSize);
+                    const batchResults = await Promise.all(batch);
+                    results.push(...batchResults.filter(result => result !== null));
+                    
+                    // Update progress
+                    updateProgress((results.length / databaseDates.length) * 100);
                 }
 
                 if (results.length === 0) {
@@ -601,8 +612,12 @@
                 // Mark changes in the results
                 markChangesInResults(results);
                 
-                // Store all results globally
+                // Store all results globally and in cache
                 allResults = results;
+                cache.set(ipAddress, {
+                    results,
+                    timestamp: Date.now()
+                });
                 
                 // Display results
                 displayResults(ipAddress, results);
@@ -617,14 +632,19 @@
         }
 
         function markChangesInResults(results) {
-            let lastCountryCode = null;
-            let lastCity = null;
-            let lastAsn = null;
+            if (results.length === 0) return;
             
-            results.forEach(result => {
-                const currentCountryCode = result.data.country?.iso_code || null;
-                const currentCity = result.data.city?.name || null;
-                const currentAsn = result.data.asn?.number || null;
+            let lastCountryCode = results[0].data.country?.iso_code || null;
+            let lastCity = results[0].data.city?.name || null;
+            let lastAsn = results[0].data.asn?.number || null;
+            
+            // First record is always a "change" since it's the first one
+            results[0].isChange = true;
+            
+            for (let i = 1; i < results.length; i++) {
+                const currentCountryCode = results[i].data.country?.iso_code || null;
+                const currentCity = results[i].data.city?.name || null;
+                const currentAsn = results[i].data.asn?.number || null;
                 
                 // Determine if this is a change based on current settings
                 let isChange = false;
@@ -640,13 +660,13 @@
                               (currentAsn !== lastAsn);
                 }
                 
-                result.isChange = isChange;
+                results[i].isChange = isChange;
                 
                 // Update last values
                 lastCountryCode = currentCountryCode;
                 lastCity = currentCity;
                 lastAsn = currentAsn;
-            });
+            }
         }
 
         function displayResults(ipAddress, results) {
