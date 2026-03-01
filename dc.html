@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>decode</title>
+    <style>
+        body {
+            background-color: #111;
+            color: #eee;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        input, button {
+            background: #222;
+            color: #0f0;
+            border: 1px solid #333;
+            padding: 10px;
+            font-family: monospace;
+            width: 100%;
+            margin: 10px 0;
+            box-sizing: border-box;
+        }
+        button {
+            background: #333;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #444;
+        }
+        #info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #1a1a1a;
+            border-left: 3px solid #666;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .hint {
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h2>> DECODE_</h2>
+    <p class="hint">paste the code from the checker (format: randomchars-letters)</p>
+    
+    <input type="text" id="codeInput" placeholder="e.g. a1b2c3d4-bacdefg">
+    <button onclick="decode()">DECODE</button>
+    
+    <div id="info">enter a code to see IP info</div>
+
+    <script>
+        async function decode() {
+            const code = document.getElementById('codeInput').value.trim();
+            const infoDiv = document.getElementById('info');
+            
+            if (!code || !code.includes('-')) {
+                infoDiv.textContent = 'invalid code format';
+                return;
+            }
+            
+            // Get the part after the dash (the encrypted IP)
+            const encrypted = code.split('-')[1];
+            
+            // Decrypt: reverse and convert letters back to numbers
+            const ip = encrypted.split('').reverse().map(char => {
+                if (char === 'x') return '.';
+                return char.charCodeAt(0) - 97; // a->0, b->1, etc
+            }).join('');
+            
+            // Validate it looks like an IP
+            if (!ip.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+                infoDiv.textContent = 'invalid IP in code';
+                return;
+            }
+            
+            infoDiv.textContent = 'fetching info...';
+            
+            try {
+                const response = await fetch(`https://ipinfaux-demo.vercel.app/api/verify?ip=${ip}`);
+                const data = await response.json();
+                
+                infoDiv.innerHTML = `
+                    <strong>IP:</strong> ${data.ip}<br>
+                    <strong>blocked:</strong> ${data.blocked}<br>
+                    ${data.reason ? `<strong>reason:</strong> ${data.reason.join(', ')}<br>` : ''}
+                    ${data.provider ? `<strong>provider:</strong> ${data.provider}` : ''}
+                `;
+            } catch (error) {
+                infoDiv.textContent = 'error fetching data';
+            }
+        }
+    </script>
+</body>
+</html>
