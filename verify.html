@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>check</title>
+    <style>
+        body {
+            background-color: black;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+        #result {
+            color: white;
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+        }
+        #code {
+            color: #333;
+            font-size: 12px;
+            margin-top: 30px;
+            font-family: monospace;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div id="result">checking...</div>
+    <div id="code"></div>
+
+    <script>
+        (async function() {
+            try {
+                const ipResponse = await fetch('https://api.ipify.org');
+                const ip = await ipResponse.text();
+                
+                const checkResponse = await fetch(`https://ipinfaux-demo.vercel.app/api/verify?ip=${ip}`);
+                const data = await checkResponse.json();
+                
+                document.getElementById('result').textContent = data.blocked ? 'blocked' : 'not blocked';
+                
+                // Generate a code: (random chars)-(simple cipher)
+                // Simple cipher: reverse the IP and replace numbers with letters (1=a, 2=b, etc)
+                const encrypted = ip.split('').reverse().map(char => {
+                    if (char === '.') return 'x';
+                    const num = parseInt(char);
+                    return String.fromCharCode(97 + num); // 0->a, 1->b, etc
+                }).join('');
+                
+                const random = Math.random().toString(36).substring(2, 10);
+                document.getElementById('code').textContent = `${random}-${encrypted}`;
+                
+            } catch (error) {
+                document.getElementById('result').textContent = 'error';
+            }
+        })();
+    </script>
+</body>
+</html>
