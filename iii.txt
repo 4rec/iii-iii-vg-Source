@@ -4,7 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 
 -- Bot owner username (change this to the bot owner's username)
-local BOT_OWNER = "YourBotOwnerUsernameHere"
+local BOT_OWNER = "Banvadis"
 
 -- Whitelist system
 local whitelistedUsers = {
