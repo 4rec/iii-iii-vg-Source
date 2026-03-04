@@ -1,0 +1,1292 @@
+-- LocalScript in StarterPlayerScripts or a Tool
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+
+-- Bot owner username (change this to the bot owner's username)
+local BOT_OWNER = "YourBotOwnerUsernameHere"
+
+-- Whitelist system
+local whitelistedUsers = {
+    [BOT_OWNER] = true  -- Bot owner is always whitelisted
+}
+-- Whitelisted username (backward compatibility - change this to the allowed username)
+local WHITELISTED_USERNAME = "YourWhitelistedUsernameHere"
+
+-- Add the original whitelisted user to the whitelist
+whitelistedUsers[WHITELISTED_USERNAME] = true
+
+-- Auto-whitelist users
+local AUTO_WHITELIST_USERS = {
+    "NanoReidedo",
+    "CF_P7", 
+    "kupcake3245"
+}
+
+-- Crafting recipes (UPDATED WITH NEW RECIPES)
+local CRAFTING_RECIPES = {
+    -- Original recipes
+    ["The All Seeing Eye"] = {
+        ["1"] = "Demon Eye",
+        ["7"] = "Eyye",
+        ["3"] = "Angel Eye",
+        ["5"] = "Eie"
+    },
+    ["Plunger Bow"] = {
+        ["5"] = "Plunger",
+        ["3"] = "Knife",
+        ["6"] = "Palm Tree"
+    },
+    ["Lizard Creature"] = {
+        ["3"] = "UFO",
+        ["6"] = "Illuminati"
+    },
+    ["Demon Eye"] = {
+        ["1"] = "Eye",
+        ["2"] = "Fire"
+    },
+    ["Beacon"] = {
+        ["5"] = "Shiny Thing",
+        ["2"] = "Light Cube"
+    },
+    ["Box Dimension"] = {
+        ["5"] = "Power Ball",
+        ["8"] = "Box",
+        ["2"] = "Portal Blue"
+    },
+    ["Radioactive Waste"] = {
+        ["1"] = "Microwave",
+        ["3"] = "Battery",
+        ["2"] = "Green Ooze"
+    },
+    ["Cheese Pizza"] = {
+        ["1"] = "Flour",
+        ["8"] = "Dough",
+        ["5"] = "Gold Bar",
+        ["4"] = "Water Bottle",
+        ["9"] = "Tomato"
+    },
+    ["Pepperoni Pizza"] = {
+        ["1"] = "Flour",
+        ["8"] = "Dough",
+        ["5"] = "Piggy Head",
+        ["4"] = "Water Bottle",
+        ["9"] = "Tomato"
+    },
+    ["Hawaiian Pizza"] = {
+        ["1"] = "Flour",
+        ["3"] = "Dough",
+        ["2"] = "Water Bottle",
+        ["5"] = "Pineapple",
+        ["4"] = "Tomato"
+    },
+    ["Skibidi Toilet"] = {
+        ["5"] = "Radioactive Waste",
+        ["8"] = "Toilet",
+        ["2"] = "a head"
+    },
+    
+    -- NEW RECIPES
+    ["Lava Sword"] = {
+        ["2"] = "A Red Sword",
+        ["5"] = "Volcano"
+    },
+    ["Rainbow Poo"] = {
+        ["2"] = "Rainbow Plunger",
+        ["5"] = "Toilet Rainbow"
+    },
+    ["Singularity"] = {
+        ["1"] = "Black Hole",
+        ["5"] = "Gradient",
+        ["9"] = "Nothing"
+    },
+    ["Speaker Head"] = {
+        ["6"] = "Rusted Boombox",
+        ["9"] = "Backrooms"
+    },
+    ["Candy Pizza"] = {
+        ["1"] = "Flour",
+        ["2"] = "Water Bottle",
+        ["3"] = "Dough",
+        ["4"] = "Sprinkles"
+    },
+    ["Goro Goro"] = {
+        ["2"] = "Potion Blue",
+        ["5"] = "Portal Blue",
+        ["8"] = "CatchAWave"
+    },
+    ["Potion Lizard"] = {
+        ["2"] = "Smoke",
+        ["3"] = "Lizard Creature",
+        ["6"] = "Potion Shrink"
+    },
+    ["Horo Horo"] = {
+        ["3"] = "Crown Pink",
+        ["5"] = "The All Seeing Eye",
+        ["7"] = "Black Hole"
+    },
+    ["Zombie Pizza"] = {
+        ["3"] = "Cheese Pizza",
+        ["6"] = "Baby Zombie",
+        ["8"] = "Singularity",
+        ["9"] = "Radioactive Waste"
+    },
+    ["Sardine Pizza"] = {
+        ["3"] = "Cheese Pizza",
+        ["4"] = "fsh"
+    },
+    ["Veggie Pizza"] = {
+        ["5"] = "Cheese Pizza",
+        ["6"] = "Tomato",
+        ["7"] = "Mushroom"
+    }
+}
+
+-- Variables for the auto-jump loop
+local autoJumpEnabled = false
+local autoJumpConnection = nil
+
+-- Variables for the buy/drop loop
+local buyDropEnabled = false
+local buyDropConnection = nil
+local currentPhase = "idle" -- idle, buying, dropping
+local dropPlatform = nil
+local originalPosition = nil
+local currentCommandUser = nil
+
+-- Variables for orbit
+local orbitEnabled = false
+local orbitConnection = nil
+local orbitDistance = 10 -- Distance from target player
+local orbitSpeed = 1 -- Speed of orbit
+
+-- Variables for annoy
+local annoyEnabled = false
+local annoyConnection = nil
+local annoyTarget = nil
+
+-- Variables for autocraft
+local autocraftEnabled = false
+local autocraftConnection = nil
+
+-- Variables for auto-whitelist
+local autoWhitelistEnabled = false
+local autoWhitelistConnection = nil
+
+-- Variables for Cold Plunge monitor
+local coldPlungeMonitor = nil
+
+-- Function to check if a player is whitelisted
+local function isWhitelistedUser(speaker)
+    return whitelistedUsers[speaker.Name] == true
+end
+
+-- Function to check if a player is the bot owner
+local function isBotOwner(speaker)
+    return speaker.Name == BOT_OWNER
+end
+
+-- Function to send chat message (with cooldown protection)
+local lastChatTime = 0
+local function sendChatMessage(message)
+    local currentTime = tick()
+    -- Only send if at least 2 seconds have passed since last message
+    if currentTime - lastChatTime >= 2 then
+        -- Try different chat methods
+        local success = pcall(function()
+            -- Method 1: TextChatService (newer method)
+            if game:GetService("TextChatService").TextChannels:FindFirstChild("RBXGeneral") then
+                game:GetService("TextChatService").TextChannels.RBXGeneral:SendAsync(message)
+            -- Method 2: Legacy chat system
+            elseif ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents") then
+                ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(message, "All")
+            else
+                -- Method 3: Player Chat Method (Fallback)
+                player:Chat(message)
+            end
+        end)
+        
+        if success then
+            lastChatTime = currentTime
+            return true
+        else
+            print("Chat failed - Message not sent: " .. message)
+            return false
+        end
+    else
+        print("Chat cooldown - Message not sent: " .. message)
+        return false
+    end
+end
+
+-- Function to add user to whitelist
+local function addToWhitelist(username)
+    if whitelistedUsers[username] then
+        return false, "User is already whitelisted!"
+    end
+    
+    whitelistedUsers[username] = true
+    return true, "Added " .. username .. " to whitelist!"
+end
+
+-- Function to remove user from whitelist
+local function removeFromWhitelist(username)
+    if not whitelistedUsers[username] then
+        return false, "User is not whitelisted!"
+    end
+    
+    -- Prevent removing bot owner
+    if username == BOT_OWNER then
+        return false, "Cannot remove bot owner from whitelist!"
+    end
+    
+    whitelistedUsers[username] = nil
+    return true, "Removed " .. username .. " from whitelist!"
+end
+
+-- Function to get whitelist status
+local function getWhitelistStatus()
+    local users = {}
+    for username, _ in pairs(whitelistedUsers) do
+        table.insert(users, username)
+    end
+    return "Whitelisted users: " .. table.concat(users, ", ")
+end
+
+-- Function to teleport to specific player
+local function teleportToPlayer(targetPlayer)
+    local targetCharacter = targetPlayer.Character
+    local playerCharacter = player.Character
+    
+    if targetCharacter and playerCharacter then
+        local targetHRP = targetCharacter:FindFirstChild("HumanoidRootPart")
+        local playerHRP = playerCharacter:FindFirstChild("HumanoidRootPart")
+        
+        if targetHRP and playerHRP then
+            playerHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
+            return true
+        end
+    end
+    return false
+end
+
+-- Function to create drop platform relative to specific player
+local function createDropPlatform(targetPlayer)
+    -- Clean up existing platform
+    if dropPlatform then
+        dropPlatform:Destroy()
+        dropPlatform = nil
+    end
+    
+    -- Create new platform
+    dropPlatform = Instance.new("Part")
+    dropPlatform.Name = "DropPlatform"
+    dropPlatform.Size = Vector3.new(3, 1, 3)
+    dropPlatform.Anchored = true
+    dropPlatform.CanCollide = true
+    dropPlatform.Material = Enum.Material.Plastic
+    dropPlatform.BrickColor = BrickColor.new("Bright green")
+    dropPlatform.Parent = workspace
+    
+    -- Position platform at fixed height relative to target player
+    local targetCharacter = targetPlayer.Character
+    if targetCharacter then
+        local targetHRP = targetCharacter:FindFirstChild("HumanoidRootPart")
+        if targetHRP then
+            -- Always create platform at fixed 25 studs above target player's position
+            dropPlatform.Position = targetHRP.Position + Vector3.new(0, 25, 0)
+        end
+    end
+    
+    return dropPlatform
+end
+
+-- Function to create a faraway platform for dropping intermediate items
+local function createFarawayPlatform()
+    local farPlatform = Instance.new("Part")
+    farPlatform.Name = "FarDropPlatform"
+    farPlatform.Size = Vector3.new(3, 1, 3)
+    farPlatform.Anchored = true
+    farPlatform.CanCollide = true
+    farPlatform.Material = Enum.Material.Plastic
+    farPlatform.BrickColor = BrickColor.new("Bright red")
+    farPlatform.Parent = workspace
+    
+    -- Position platform far away from the map
+    farPlatform.Position = Vector3.new(10000, 10000, 10000)
+    
+    return farPlatform
+end
+
+-- Function to teleport player to drop platform
+local function teleportToDropPlatform()
+    local playerCharacter = player.Character
+    local platform = dropPlatform
+    
+    if playerCharacter and platform then
+        local humanoidRootPart = playerCharacter:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            -- Teleport player to platform (always at same height)
+            humanoidRootPart.CFrame = platform.CFrame + Vector3.new(0, 3, 0)
+            return true
+        end
+    end
+    return false
+end
+
+-- Function to teleport to faraway platform
+local function teleportToFarawayPlatform(farPlatform)
+    local playerCharacter = player.Character
+    if playerCharacter and farPlatform then
+        local humanoidRootPart = playerCharacter:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            humanoidRootPart.CFrame = farPlatform.CFrame + Vector3.new(0, 3, 0)
+            return true
+        end
+    end
+    return false
+end
+
+-- Function to cleanup drop platform
+local function cleanupDropPlatform()
+    if dropPlatform then
+        dropPlatform:Destroy()
+        dropPlatform = nil
+    end
+end
+
+-- Function to fire the jump remote
+local function fireJumpRemote()
+    local remoteEvent = ReplicatedStorage:FindFirstChild("RemoteEvents")
+    if remoteEvent then
+        remoteEvent = remoteEvent:FindFirstChild("Jumped")
+        if remoteEvent then
+            remoteEvent:FireServer()
+        else
+            warn("Jumped remote event not found!")
+        end
+    else
+        warn("RemoteEvents folder not found!")
+    end
+end
+
+-- Function to buy an item
+local function buyItem(itemName)
+    local remoteEvent = ReplicatedStorage:FindFirstChild("RemoteEvents")
+    if remoteEvent then
+        remoteEvent = remoteEvent:FindFirstChild("BuyItemCash")
+        if remoteEvent then
+            local args = {[1] = itemName}
+            remoteEvent:FireServer(unpack(args))
+            return true
+        else
+            warn("BuyItemCash remote event not found!")
+            return false
+        end
+    else
+        warn("RemoteEvents folder not found!")
+        return false
+    end
+end
+
+-- Function to drop an item
+local function dropItem(itemName)
+    local remoteEvent = ReplicatedStorage:FindFirstChild("RemoteEvents")
+    if remoteEvent then
+        remoteEvent = remoteEvent:FindFirstChild("Drop")
+        if remoteEvent then
+            local args = {[1] = itemName}
+            remoteEvent:FireServer(unpack(args))
+            return true
+        else
+            warn("Drop remote event not found!")
+            return false
+        end
+    else
+        warn("RemoteEvents folder not found!")
+        return false
+    end
+end
+
+-- Function to craft an item
+local function craftItem(recipe)
+    local remoteEvent = ReplicatedStorage:FindFirstChild("RemoteEvents")
+    if remoteEvent then
+        remoteEvent = remoteEvent:FindFirstChild("Craft")
+        if remoteEvent then
+            local args = {[1] = recipe}
+            remoteEvent:InvokeServer(unpack(args))
+            return true
+        else
+            warn("Craft remote event not found!")
+            return false
+        end
+    else
+        warn("RemoteEvents folder not found!")
+        return false
+    end
+end
+
+-- Function to equip an item
+local function equipItem(itemName)
+    local remoteEvent = ReplicatedStorage:FindFirstChild("RemoteEvents")
+    if remoteEvent then
+        remoteEvent = remoteEvent:FindFirstChild("Equip")
+        if remoteEvent then
+            local args = {[1] = itemName}
+            remoteEvent:FireServer(unpack(args))
+            return true
+        else
+            warn("Equip remote event not found!")
+            return false
+        end
+    else
+        warn("RemoteEvents folder not found!")
+        return false
+    end
+end
+
+-- Function to delete Cold Plunge objects
+local function deleteColdPlungeObjects()
+    local coldPlungeObjects = workspace:GetDescendants()
+    local deletedCount = 0
+    
+    for _, obj in ipairs(coldPlungeObjects) do
+        if obj.Name == "Cold Plunge" then
+            obj:Destroy()
+            deletedCount = deletedCount + 1
+            print("Deleted Cold Plunge object: " .. obj:GetFullName())
+        end
+    end
+    
+    if deletedCount > 0 then
+        print("Successfully deleted " .. deletedCount .. " Cold Plunge objects")
+    else
+        print("No Cold Plunge objects found to delete")
+    end
+end
+
+-- Function to start Cold Plunge monitor
+local function startColdPlungeMonitor()
+    local connection
+    connection = workspace.DescendantAdded:Connect(function(descendant)
+        if descendant.Name == "Cold Plunge" then
+            task.wait(0.1) -- Small delay to ensure object is fully loaded
+            descendant:Destroy()
+            print("Automatically deleted new Cold Plunge object: " .. descendant:GetFullName())
+        end
+    end)
+    
+    return connection
+end
+
+-- Function to auto-whitelist specific users
+local function autoWhitelistUsers()
+    local whitelistedCount = 0
+    
+    for _, targetUsername in ipairs(AUTO_WHITELIST_USERS) do
+        local playerObj = Players:FindFirstChild(targetUsername)
+        if playerObj and not whitelistedUsers[targetUsername] then
+            -- Add to whitelist
+            whitelistedUsers[targetUsername] = true
+            whitelistedCount = whitelistedCount + 1
+            print("Auto-whitelisted: " .. targetUsername)
+            sendChatMessage("Auto-whitelisted: " .. targetUsername)
+        end
+    end
+    
+    if whitelistedCount > 0 then
+        print("Auto-whitelist: Added " .. whitelistedCount .. " users to whitelist")
+    end
+end
+
+-- Function to start auto-whitelist
+local function startAutoWhitelist()
+    if autoWhitelistEnabled then return end
+    
+    autoWhitelistEnabled = true
+    print("Auto-whitelist system started!")
+    sendChatMessage("Auto-whitelist system started!")
+    
+    -- Run immediately once
+    autoWhitelistUsers()
+    
+    -- Then run every 5 seconds
+    autoWhitelistConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not autoWhitelistEnabled then return end
+        autoWhitelistUsers()
+        task.wait(5) -- Wait 5 seconds between checks
+    end)
+end
+
+-- Function to stop auto-whitelist
+local function stopAutoWhitelist()
+    if not autoWhitelistEnabled then return end
+    
+    autoWhitelistEnabled = false
+    if autoWhitelistConnection then
+        autoWhitelistConnection:Disconnect()
+        autoWhitelistConnection = nil
+    end
+    print("Auto-whitelist system stopped!")
+    sendChatMessage("Auto-whitelist system stopped!")
+end
+
+-- Function to get all required items for a recipe (including nested recipes)
+local function getRequiredItems(itemName, quantity)
+    local requiredItems = {}
+    
+    local function addItems(recipe, mult)
+        for _, item in pairs(recipe) do
+            if CRAFTING_RECIPES[item] then
+                -- This is a craftable item, get its ingredients
+                addItems(CRAFTING_RECIPES[item], mult)
+            else
+                -- This is a base item
+                requiredItems[item] = (requiredItems[item] or 0) + mult
+            end
+        end
+    end
+    
+    if CRAFTING_RECIPES[itemName] then
+        addItems(CRAFTING_RECIPES[itemName], quantity)
+    end
+    
+    return requiredItems
+end
+
+-- Function to start auto jumping
+local function startAutoJump()
+    if autoJumpEnabled then return end
+    
+    autoJumpEnabled = true
+    print("Auto jump started!")
+    sendChatMessage("Auto jump started!")
+    
+    autoJumpConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if autoJumpEnabled then
+            fireJumpRemote()
+            task.wait(0.7) -- Wait 0.7 seconds between fires
+        end
+    end)
+end
+
+-- Function to stop auto jumping
+local function stopAutoJump()
+    if not autoJumpEnabled then return end
+    
+    autoJumpEnabled = false
+    if autoJumpConnection then
+        autoJumpConnection:Disconnect()
+        autoJumpConnection = nil
+    end
+    print("Auto jump stopped!")
+    sendChatMessage("Auto jump stopped!")
+end
+
+-- Function to parse buy command
+local function parseBuyCommand(message)
+    -- Remove the command prefix and trim spaces
+    local cleanMessage = message:gsub("^!%a+%s*", ""):gsub("%s+", " ")
+    
+    -- Look for pattern: number-hyphen-text
+    local amount, itemName = cleanMessage:match("^(%d+)%-(.+)$")
+    
+    if amount and itemName then
+        -- Clean up the item name (remove extra spaces)
+        itemName = itemName:gsub("^%s+", ""):gsub("%s+$", "")
+        return tonumber(amount), itemName
+    end
+    
+    return nil, nil
+end
+
+-- Function to start buy/drop loop
+local function startBuyDrop(amount, itemName, commandUser)
+    if buyDropEnabled then 
+        print("Buy/Drop already running! Use !sbd to stop first.")
+        sendChatMessage("Buy/Drop already running! Use !sbd to stop first.")
+        return 
+    end
+    
+    buyDropEnabled = true
+    currentPhase = "buying"
+    local count = 0
+    local progressMessageSent = false
+    local completed = false
+    
+    -- Store the command user for teleporting back
+    currentCommandUser = commandUser
+    
+    print("Starting Buy/Drop: " .. amount .. "x " .. itemName)
+    sendChatMessage("Starting Buy/Drop: " .. amount .. "x " .. itemName)
+    
+    -- Create drop platform relative to command user
+    createDropPlatform(commandUser)
+    
+    buyDropConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not buyDropEnabled then
+            cleanupDropPlatform()
+            return 
+        end
+        
+        if completed then return end
+        
+        if currentPhase == "buying" then
+            if count < amount then
+                -- Buy phase
+                if buyItem(itemName) then
+                    print("Bought: " .. itemName .. " (" .. (count + 1) .. "/" .. amount .. ")")
+                end
+                currentPhase = "waiting_buy"
+                task.wait(1) -- 1 second delay after buy
+                currentPhase = "dropping"
+            else
+                -- Finished all cycles
+                completed = true
+                sendChatMessage("Buy/Drop completed! " .. amount .. "x " .. itemName)
+                print("Buy/Drop completed!")
+                -- Teleport back to the user who sent the command
+                if currentCommandUser then
+                    teleportToPlayer(currentCommandUser)
+                    sendChatMessage("Returned to " .. currentCommandUser.Name)
+                end
+                stopBuyDrop()
+                return
+            end
+            
+        elseif currentPhase == "dropping" then
+            -- Drop phase - teleport to platform first
+            if teleportToDropPlatform() then
+                -- Drop phase
+                if dropItem(itemName) then
+                    print("Dropped: " .. itemName .. " (" .. (count + 1) .. "/" .. amount .. ")")
+                    
+                    -- Send progress messages at 50% and 100%
+                    local progress = (count + 1) / amount
+                    if progress >= 0.5 and progress < 0.51 and not progressMessageSent then
+                        sendChatMessage("Buy/Drop 50% complete!")
+                        progressMessageSent = true
+                    elseif progress >= 1.0 then
+                        sendChatMessage("Buy/Drop 100% complete!")
+                    end
+                end
+                count = count + 1
+                currentPhase = "waiting_drop"
+                task.wait(1) -- 1 second delay after drop
+                
+                if count >= amount then
+                    -- Finished all cycles after this drop
+                    completed = true
+                    sendChatMessage("Buy/Drop completed! " .. amount .. "x " .. itemName)
+                    print("Buy/Drop completed!")
+                    -- Teleport back to the user who sent the command
+                    if currentCommandUser then
+                        teleportToPlayer(currentCommandUser)
+                        sendChatMessage("Returned to " .. currentCommandUser.Name)
+                    end
+                    stopBuyDrop()
+                    return
+                else
+                    currentPhase = "buying"
+                end
+            else
+                warn("Failed to teleport to drop platform!")
+                sendChatMessage("Buy/Drop failed - teleport error!")
+                -- Teleport back to the user who sent the command even on error
+                if currentCommandUser then
+                    teleportToPlayer(currentCommandUser)
+                    sendChatMessage("Returned to " .. currentCommandUser.Name)
+                end
+                stopBuyDrop()
+            end
+        end
+    end)
+end
+
+-- Function to stop buy/drop immediately
+local function stopBuyDrop()
+    if not buyDropEnabled then return end
+    
+    buyDropEnabled = false
+    currentPhase = "idle"
+    
+    if buyDropConnection then
+        buyDropConnection:Disconnect()
+        buyDropConnection = nil
+    end
+    
+    -- Clean up platform
+    cleanupDropPlatform()
+    
+    -- Teleport back to the command user when stopped
+    if currentCommandUser then
+        teleportToPlayer(currentCommandUser)
+        sendChatMessage("Returned to " .. currentCommandUser.Name)
+    end
+    
+    print("Buy/Drop stopped immediately!")
+    sendChatMessage("Buy/Drop stopped!")
+end
+
+-- Function to start orbiting specific player
+local function startOrbit(targetPlayer)
+    if orbitEnabled then return end
+    
+    orbitEnabled = true
+    print("Orbit started!")
+    sendChatMessage("Starting orbit around " .. targetPlayer.Name)
+    
+    local angle = 0
+    
+    orbitConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not orbitEnabled then return end
+        
+        local targetCharacter = targetPlayer.Character
+        local playerCharacter = player.Character
+        
+        if targetCharacter and playerCharacter then
+            local targetHRP = targetCharacter:FindFirstChild("HumanoidRootPart")
+            local playerHRP = playerCharacter:FindFirstChild("HumanoidRootPart")
+            
+            if targetHRP and playerHRP then
+                -- Calculate orbit position
+                angle = angle + orbitSpeed * 0.1
+                if angle >= 360 then angle = 0 end
+                
+                local x = math.cos(angle) * orbitDistance
+                local z = math.sin(angle) * orbitDistance
+                
+                -- Position player in orbit around target
+                local orbitPosition = targetHRP.Position + Vector3.new(x, 3, z)
+                playerHRP.CFrame = CFrame.new(orbitPosition, targetHRP.Position)
+            else
+                sendChatMessage("Orbit stopped - character parts missing!")
+                stopOrbit()
+            end
+        else
+            sendChatMessage("Orbit stopped - characters not found!")
+            stopOrbit()
+        end
+    end)
+end
+
+-- Function to stop orbit
+local function stopOrbit()
+    if not orbitEnabled then return end
+    
+    orbitEnabled = false
+    if orbitConnection then
+        orbitConnection:Disconnect()
+        orbitConnection = nil
+    end
+    print("Orbit stopped!")
+    sendChatMessage("Orbit stopped!")
+end
+
+-- Function to start annoying a player
+local function startAnnoy(targetUsername)
+    if annoyEnabled then return end
+    
+    local targetPlayer = Players:FindFirstChild(targetUsername)
+    if not targetPlayer then
+        sendChatMessage("Player '" .. targetUsername .. "' not found!")
+        return
+    end
+    
+    annoyEnabled = true
+    annoyTarget = targetPlayer
+    print("Annoying " .. targetUsername)
+    sendChatMessage("Now annoying " .. targetUsername)
+    
+    annoyConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not annoyEnabled then return end
+        
+        local success = teleportToPlayer(annoyTarget)
+        if not success then
+            sendChatMessage("Stopped annoying " .. targetUsername .. " - player left or character missing")
+            stopAnnoy()
+        end
+    end)
+end
+
+-- Function to stop annoying
+local function stopAnnoy()
+    if not annoyEnabled then return end
+    
+    annoyEnabled = false
+    annoyTarget = nil
+    if annoyConnection then
+        annoyConnection:Disconnect()
+        annoyConnection = nil
+    end
+    print("Annoy stopped!")
+    sendChatMessage("Annoy stopped!")
+end
+
+-- Function to start autocraft process
+local function startAutocraft(quantity, itemName, commandUser)
+    if autocraftEnabled then 
+        sendChatMessage("Autocraft already running!")
+        return 
+    end
+    
+    if not CRAFTING_RECIPES[itemName] then
+        sendChatMessage("Unknown recipe: " .. itemName)
+        return
+    end
+    
+    autocraftEnabled = true
+    currentCommandUser = commandUser
+    
+    sendChatMessage("Please wait! Bot is currently crafting " .. quantity .. "x " .. itemName)
+    
+    -- Create main platform for final crafting
+    createDropPlatform(commandUser)
+    
+    -- Run the autocraft process once (not in a loop)
+    coroutine.wrap(function()
+        -- Get all required base items
+        local requiredItems = getRequiredItems(itemName, quantity)
+        
+        -- Buy all required base items
+        sendChatMessage("Buying required materials...")
+        for itemName, itemQuantity in pairs(requiredItems) do
+            if not autocraftEnabled then break end
+            sendChatMessage("Buying " .. itemQuantity .. "x " .. itemName)
+            for i = 1, itemQuantity do
+                if not autocraftEnabled then break end
+                buyItem(itemName)
+                print("Bought: " .. itemName .. " (" .. i .. "/" .. itemQuantity .. ")")
+                if i < itemQuantity then
+                    task.wait(1)
+                end
+            end
+            if not autocraftEnabled then break end
+            task.wait(1)
+        end
+        if not autocraftEnabled then 
+            cleanupDropPlatform()
+            return 
+        end
+        
+        -- Check if there are intermediate items to craft
+        local hasIntermediateItems = false
+        if CRAFTING_RECIPES[itemName] then
+            for _, ingredient in pairs(CRAFTING_RECIPES[itemName]) do
+                if CRAFTING_RECIPES[ingredient] then
+                    hasIntermediateItems = true
+                    break
+                end
+            end
+        end
+        
+        -- Craft intermediate items on faraway platform (to prevent dropping)
+        if hasIntermediateItems then
+            sendChatMessage("Crafting intermediate items...")
+            local farPlatform = createFarawayPlatform()
+            
+            local function craftIfNeeded(ingredientName, qty)
+                if CRAFTING_RECIPES[ingredientName] then
+                    sendChatMessage("Crafting " .. qty .. "x " .. ingredientName)
+                    
+                    -- Teleport to faraway platform for intermediate crafting
+                    if teleportToFarawayPlatform(farPlatform) then
+                        sendChatMessage("Moved to safe location for intermediate crafting")
+                    end
+                    
+                    for i = 1, qty do
+                        if not autocraftEnabled then break end
+                        craftItem(CRAFTING_RECIPES[ingredientName])
+                        print("Crafted: " .. ingredientName .. " (" .. i .. "/" .. qty .. ")")
+                        
+                        -- The craft remote automatically drops, but we're far away so items return to inventory
+                        if i < qty then
+                            task.wait(1)
+                        end
+                    end
+                    
+                    -- Return to main platform after intermediate crafting
+                    if teleportToDropPlatform() then
+                        sendChatMessage("Returned to main platform")
+                    end
+                    
+                    task.wait(1)
+                end
+            end
+            
+            -- Craft all intermediate items needed for the target item
+            if CRAFTING_RECIPES[itemName] then
+                for _, ingredient in pairs(CRAFTING_RECIPES[itemName]) do
+                    if not autocraftEnabled then break end
+                    if CRAFTING_RECIPES[ingredient] then
+                        craftIfNeeded(ingredient, quantity)
+                    end
+                end
+            end
+            
+            -- Clean up far platform
+            if farPlatform then
+                farPlatform:Destroy()
+            end
+        else
+            sendChatMessage("No intermediate items needed - proceeding to final craft")
+        end
+        
+        if not autocraftEnabled then 
+            cleanupDropPlatform()
+            return 
+        end
+        
+        -- Always teleport to main platform for final crafting
+        if not hasIntermediateItems then
+            -- If no intermediates, teleport to platform now for final crafting
+            if teleportToDropPlatform() then
+                sendChatMessage("Teleported to crafting platform")
+            else
+                sendChatMessage("Failed to teleport to platform!")
+                stopAutocraft()
+                return
+            end
+        end
+        
+        -- Craft the final item on main platform (this will auto-drop)
+        sendChatMessage("Crafting final item: " .. itemName)
+        for i = 1, quantity do
+            if not autocraftEnabled then break end
+            craftItem(CRAFTING_RECIPES[itemName])
+            print("Crafted: " .. itemName .. " (" .. i .. "/" .. quantity .. ")")
+            
+            -- No need to equip/drop since craft remote auto-drops
+            -- Just wait between crafts
+            if i < quantity then
+                task.wait(1)
+            end
+        end
+        
+        sendChatMessage("Autocraft completed! Crafted " .. quantity .. "x " .. itemName)
+        
+        -- Teleport back to command user
+        if currentCommandUser then
+            teleportToPlayer(currentCommandUser)
+            sendChatMessage("Returned to " .. currentCommandUser.Name)
+        end
+        
+        stopAutocraft()
+    end)()
+end
+
+-- Function to stop autocraft
+local function stopAutocraft()
+    if not autocraftEnabled then return end
+    
+    autocraftEnabled = false
+    if autocraftConnection then
+        autocraftConnection:Disconnect()
+        autocraftConnection = nil
+    end
+    
+    -- Clean up platform
+    cleanupDropPlatform()
+    
+    -- Teleport back to command user when stopped
+    if currentCommandUser then
+        teleportToPlayer(currentCommandUser)
+        sendChatMessage("Returned to " .. currentCommandUser.Name)
+    end
+    
+    sendChatMessage("Autocraft stopped!")
+end
+
+-- Function to show help
+local function showHelp()
+    -- Split help into multiple messages to avoid character limits
+    sendChatMessage("=== BOT HELP ===")
+    task.wait(2.5)
+    sendChatMessage("Whitelist Commands (Owner Only): !wl username, !uwl username, !wlstatus")
+    task.wait(2.5)
+    sendChatMessage("Movement: !b (teleport to you), !o (orbit you), !so (stop orbit)")
+    task.wait(2.5)
+    sendChatMessage("Jump: !a (jump once), !toa (auto jump), !tsa (stop auto jump)")
+    task.wait(2.5)
+    sendChatMessage("Items: !buy amount-item, !bd amount-item (buy+drop), !sbd (stop)")
+    task.wait(2.5)
+    sendChatMessage("Crafting: !ac amount-item (autocraft), !sac (stop autocraft)")
+    task.wait(2.5)
+    sendChatMessage("Fun: !e text (echo), !an username (annoy), !san (stop annoy)")
+    task.wait(2.5)
+    sendChatMessage("Auto-features: Auto-whitelist for NanoReidedo, CF_P7, kupcake3245")
+    task.wait(2.5)
+    sendChatMessage("Available crafts: " .. table.concat(getCraftableItems(), ", "))
+end
+
+-- Function to get list of craftable items
+local function getCraftableItems()
+    local items = {}
+    for itemName, _ in pairs(CRAFTING_RECIPES) do
+        table.insert(items, itemName)
+    end
+    table.sort(items)
+    return items
+end
+
+-- Function to handle player joining for immediate whitelisting
+local function onPlayerAddedAutoWhitelist(newPlayer)
+    if table.find(AUTO_WHITELIST_USERS, newPlayer.Name) and not whitelistedUsers[newPlayer.Name] then
+        whitelistedUsers[newPlayer.Name] = true
+        print("Auto-whitelisted (on join): " .. newPlayer.Name)
+        sendChatMessage("Auto-whitelisted: " .. newPlayer.Name)
+    end
+end
+
+-- Function to handle chat messages
+local function onPlayerChatted(message, speaker)
+    local command = message:lower()
+    
+    -- !wl command - Add user to whitelist (Bot Owner Only)
+    if command:sub(1,3) == "!wl" and isBotOwner(speaker) then
+        local username = message:sub(4):gsub("^%s+", ""):gsub("%s+$", "")
+        if username ~= "" then
+            local success, result = addToWhitelist(username)
+            sendChatMessage(result)
+            print("Whitelist add attempt: " .. username .. " - " .. result)
+        else
+            sendChatMessage("Usage: !wl username")
+        end
+        return
+    
+    -- !uwl command - Remove user from whitelist (Bot Owner Only)
+    elseif command:sub(1,4) == "!uwl" and isBotOwner(speaker) then
+        local username = message:sub(5):gsub("^%s+", ""):gsub("%s+$", "")
+        if username ~= "" then
+            local success, result = removeFromWhitelist(username)
+            sendChatMessage(result)
+            print("Whitelist remove attempt: " .. username .. " - " .. result)
+        else
+            sendChatMessage("Usage: !uwl username")
+        end
+        return
+    
+    -- !wlstatus command - Show whitelist status (Bot Owner Only)
+    elseif command == "!wlstatus" and isBotOwner(speaker) then
+        local status = getWhitelistStatus()
+        sendChatMessage(status)
+        return
+    end
+    
+    -- Check if the speaker is whitelisted for all other commands
+    if not isWhitelistedUser(speaker) then return end
+    
+    -- !help command - Show help
+    if command == "!help" then
+        showHelp()
+    
+    -- !b command - Bring player to the user who sent the command
+    elseif command == "!b" then
+        local success = teleportToPlayer(speaker)
+        if success then
+            sendChatMessage("Teleported to " .. speaker.Name)
+        else
+            sendChatMessage("Failed to teleport to " .. speaker.Name)
+        end
+    
+    -- !a command - Fire jump remote once
+    elseif command == "!a" then
+        fireJumpRemote()
+        print("Jump remote fired once!")
+        sendChatMessage("Jump executed!")
+    
+    -- !toa command - Start auto jumping (every 0.7 seconds)
+    elseif command == "!toa" then
+        startAutoJump()
+    
+    -- !tsa command - Stop auto jumping
+    elseif command == "!tsa" then
+        stopAutoJump()
+    
+    -- !buy command - Buy items
+    elseif command:sub(1,4) == "!buy" then
+        local amount, itemName = parseBuyCommand(message)
+        if amount and itemName then
+            if amount > 0 then
+                -- Stop any existing buy/drop first
+                stopBuyDrop()
+                task.wait(0.1)
+                
+                -- Start buying only
+                print("Starting buy: " .. amount .. "x " .. itemName)
+                sendChatMessage("Starting buy: " .. amount .. "x " .. itemName)
+                for i = 1, amount do
+                    if not buyDropEnabled then
+                        buyItem(itemName)
+                        print("Bought: " .. itemName .. " (" .. i .. "/" .. amount .. ")")
+                        if i == math.floor(amount * 0.5) then
+                            sendChatMessage("Buy 50% complete!")
+                        elseif i == amount then
+                            sendChatMessage("Buy 100% complete!")
+                        end
+                        if i < amount then
+                            task.wait(1) -- 1 second delay between buys
+                        end
+                    else
+                        break
+                    end
+                end
+                print("Buy completed!")
+            else
+                warn("Invalid amount: " .. tostring(amount))
+            end
+        else
+            warn("Invalid !buy format. Use: !buy amount-itemname")
+            warn("Example: !buy 5-8Bit Pineapple")
+            warn("Your input: " .. message)
+        end
+    
+    -- !bd command - Buy and drop loop
+    elseif command:sub(1,3) == "!bd" then
+        local amount, itemName = parseBuyCommand(message)
+        if amount and itemName then
+            if amount > 0 then
+                stopBuyDrop()
+                task.wait(0.1)
+                startBuyDrop(amount, itemName, speaker)
+            else
+                warn("Invalid amount: " .. tostring(amount))
+            end
+        else
+            warn("Invalid !bd format. Use: !bd amount-itemname")
+            warn("Example: !bd 3-8Bit Pineapple")
+            warn("Your input: " .. message)
+        end
+    
+    -- !sbd command - Stop buy/drop
+    elseif command == "!sbd" then
+        stopBuyDrop()
+    
+    -- !ac command - Autocraft items
+    elseif command:sub(1,3) == "!ac" then
+        local amount, itemName = parseBuyCommand(message)
+        if amount and itemName then
+            if amount > 0 then
+                stopAutocraft()
+                task.wait(0.1)
+                startAutocraft(amount, itemName, speaker)
+            else
+                sendChatMessage("Invalid amount: " .. tostring(amount))
+            end
+        else
+            sendChatMessage("Invalid !ac format. Use: !ac amount-itemname")
+            sendChatMessage("Example: !ac 5-Skibidi Toilet")
+            sendChatMessage("Available: " .. table.concat(getCraftableItems(), ", "))
+        end
+    
+    -- !sac command - Stop autocraft
+    elseif command == "!sac" then
+        stopAutocraft()
+    
+    -- !o command - Start orbiting the user who sent the command (short for orbit)
+    elseif command == "!o" then
+        startOrbit(speaker)
+    
+    -- !so command - Stop orbiting (short for stop orbit)
+    elseif command == "!so" then
+        stopOrbit()
+    
+    -- !e command - Echo text
+    elseif command:sub(1,2) == "!e" then
+        local text = message:sub(3):gsub("^%s+", ""):gsub("%s+$", "")
+        if text ~= "" then
+            sendChatMessage(text)
+        else
+            sendChatMessage("Usage: !e your message here")
+        end
+    
+    -- !an command - Annoy a player
+    elseif command:sub(1,3) == "!an" then
+        local username = message:sub(4):gsub("^%s+", ""):gsub("%s+$", "")
+        if username ~= "" then
+            stopAnnoy()
+            task.wait(0.1)
+            startAnnoy(username)
+        else
+            sendChatMessage("Usage: !an username")
+        end
+    
+    -- !san command - Stop annoying
+    elseif command == "!san" then
+        stopAnnoy()
+    end
+end
+
+-- Connect to the chat event
+local function onPlayerAdded(newPlayer)
+    newPlayer.Chatted:Connect(function(message)
+        onPlayerChatted(message, newPlayer)
+    end)
+end
+
+-- Set up event listeners for existing and new players
+for _, existingPlayer in pairs(Players:GetPlayers()) do
+    onPlayerAdded(existingPlayer)
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+
+-- Start auto-whitelist system
+startAutoWhitelist()
+
+-- Set up auto-whitelist for new players joining
+Players.PlayerAdded:Connect(onPlayerAddedAutoWhitelist)
+
+-- Also check existing players when script starts
+for _, existingPlayer in pairs(Players:GetPlayers()) do
+    onPlayerAddedAutoWhitelist(existingPlayer)
+end
+
+-- Delete Cold Plunge objects on script start
+deleteColdPlungeObjects()
+
+-- Start monitoring for new Cold Plunge objects
+coldPlungeMonitor = startColdPlungeMonitor()
+
+-- Clean up on player leaving
+Players.PlayerRemoving:Connect(function(leavingPlayer)
+    if leavingPlayer == player then
+        stopAutoJump()
+        stopBuyDrop()
+        stopOrbit()
+        stopAnnoy()
+        stopAutocraft()
+        stopAutoWhitelist()
+        cleanupDropPlatform()
+        
+        -- Clean up Cold Plunge monitor
+        if coldPlungeMonitor then
+            coldPlungeMonitor:Disconnect()
+        end
+    end
+end)
+
+print("Command system loaded! Bot Owner: " .. BOT_OWNER)
+print("Available crafts: " .. table.concat(getCraftableItems(), ", "))
+print("Auto-whitelist users: NanoReidedo, CF_P7, kupcake3245")
+print("Cold Plunge deletion active")
+print("Commands:")
+print("!help - Show all commands")
+print("!wl username - Add user to whitelist (Owner Only)")
+print("!uwl username - Remove user from whitelist (Owner Only)")
+print("!wlstatus - Show whitelist status (Owner Only)")
+print("!b - Bring to the user who sent the command")
+print("!a - Jump once")
+print("!toa - Start auto jump")
+print("!tsa - Stop auto jump")
+print("!buy amount-item - Buy items (1s delay)")
+print("!bd amount-item - Buy & drop loop (1s delays)")
+print("!sbd - Stop buy/drop immediately")
+print("!ac amount-item - Autocraft item with equip/drop")
+print("!sac - Stop autocraft")
+print("!o - Orbit around the user who sent the command")
+print("!so - Stop orbiting")
+print("!e text - Echo text in chat")
+print("!an username - Annoy player by constantly teleporting to them")
+print("!san - Stop annoying")
