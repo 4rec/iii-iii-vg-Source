@@ -19,6 +19,7 @@ whitelistedUsers[WHITELISTED_USERNAME] = true
 -- Auto-whitelist users
 local AUTO_WHITELIST_USERS = {
     "Tyler_jimmykam67Bsf",
+    "Xxskyxd3",
     "kupcake3245"
 }
 
