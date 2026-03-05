@@ -186,6 +186,60 @@ local function isBotOwner(speaker)
     return speaker.Name == BOT_OWNER
 end
 
+-- Function to find best matching username
+local function findMatchingUsername(input, excludeSelf)
+    if not input or input == "" then
+        return nil, "Please provide a username"
+    end
+    
+    input = input:lower()
+    local matches = {}
+    
+    -- Get all players
+    for _, playerObj in pairs(Players:GetPlayers()) do
+        local playerName = playerObj.Name
+        local playerNameLower = playerName:lower()
+        
+        -- Skip self if requested
+        if excludeSelf and playerObj == player then
+            continue
+        end
+        
+        -- Check if input matches start of username
+        if playerNameLower:sub(1, #input) == input then
+            table.insert(matches, playerName)
+        end
+    end
+    
+    -- Sort matches alphabetically
+    table.sort(matches)
+    
+    if #matches == 0 then
+        return nil, "No users found matching '" .. input .. "'"
+    elseif #matches == 1 then
+        return matches[1], nil
+    else
+        -- Multiple matches found
+        local matchList = table.concat(matches, ", ")
+        return nil, "Multiple users found: " .. matchList .. ". Please be more specific."
+    end
+end
+
+-- Function to find best matching player object
+local function findMatchingPlayer(input, excludeSelf)
+    local username, error = findMatchingUsername(input, excludeSelf)
+    if error then
+        return nil, error
+    end
+    
+    local playerObj = Players:FindFirstChild(username)
+    if playerObj then
+        return playerObj, nil
+    else
+        return nil, "Player '" .. username .. "' not found in server"
+    end
+end
+
 -- Function to send chat message (with cooldown protection)
 local lastChatTime = 0
 local function sendChatMessage(message)
@@ -1041,29 +1095,23 @@ end
 local function onPlayerChatted(message, speaker)
     local command = message:lower()
     
-    -- !wl command - Add user to whitelist (Bot Owner Only)
-    if command:sub(1,3) == "!wl" and isBotOwner(speaker) then
-        local username = message:sub(4):gsub("^%s+", ""):gsub("%s+$", "")
-        if username ~= "" then
-            local success, result = addToWhitelist(username)
-            sendChatMessage(result)
-            print("Whitelist add attempt: " .. username .. " - " .. result)
-        else
-            sendChatMessage("Usage: !wl username")
-        end
-        return
     
-    -- !uwl command - Remove user from whitelist (Bot Owner Only)
-    elseif command:sub(1,4) == "!uwl" and isBotOwner(speaker) then
-        local username = message:sub(5):gsub("^%s+", ""):gsub("%s+$", "")
-        if username ~= "" then
-            local success, result = removeFromWhitelist(username)
-            sendChatMessage(result)
-            print("Whitelist remove attempt: " .. username .. " - " .. result)
+-- !wl command - Add user to whitelist (Bot Owner Only)
+if command:sub(1,3) == "!wl" and isBotOwner(speaker) then
+    local username = message:sub(4):gsub("^%s+", ""):gsub("%s+$", "")
+    if username ~= "" then
+        local matchedUsername, error = findMatchingUsername(username, false)
+        if error then
+            sendChatMessage(error)
         else
-            sendChatMessage("Usage: !uwl username")
+            local success, result = addToWhitelist(matchedUsername)
+            sendChatMessage(result)
+            print("Whitelist add attempt: " .. matchedUsername .. " - " .. result)
         end
-        return
+    else
+        sendChatMessage("Usage: !wl username")
+    end
+    return
     
     -- !wlstatus command - Show whitelist status (Bot Owner Only)
     elseif command == "!wlstatus" and isBotOwner(speaker) then
@@ -1160,6 +1208,22 @@ local function onPlayerChatted(message, speaker)
     -- !sbd command - Stop buy/drop
     elseif command == "!sbd" then
         stopBuyDrop()
+
+    elseif command:sub(1,4) == "!uwl" and isBotOwner(speaker) then
+    local username = message:sub(5):gsub("^%s+", ""):gsub("%s+$", "")
+    if username ~= "" then
+        local matchedUsername, error = findMatchingUsername(username, false)
+        if error then
+            sendChatMessage(error)
+        else
+            local success, result = removeFromWhitelist(matchedUsername)
+            sendChatMessage(result)
+            print("Whitelist remove attempt: " .. matchedUsername .. " - " .. result)
+        end
+    else
+        sendChatMessage("Usage: !uwl username")
+    end
+    return
     
     -- !ac command - Autocraft items
     elseif command:sub(1,3) == "!ac" then
@@ -1200,15 +1264,20 @@ local function onPlayerChatted(message, speaker)
         end
     
     -- !an command - Annoy a player
-    elseif command:sub(1,3) == "!an" then
-        local username = message:sub(4):gsub("^%s+", ""):gsub("%s+$", "")
-        if username ~= "" then
+elseif command:sub(1,3) == "!an" then
+    local username = message:sub(4):gsub("^%s+", ""):gsub("%s+$", "")
+    if username ~= "" then
+        local targetPlayer, error = findMatchingPlayer(username, false)
+        if error then
+            sendChatMessage(error)
+        else
             stopAnnoy()
             task.wait(0.1)
-            startAnnoy(username)
-        else
-            sendChatMessage("Usage: !an username")
+            startAnnoy(targetPlayer.Name)
         end
+    else
+        sendChatMessage("Usage: !an username")
+    end
     
     -- !san command - Stop annoying
     elseif command == "!san" then
