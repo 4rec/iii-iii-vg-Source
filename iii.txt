@@ -452,7 +452,7 @@ local function deleteColdPlungeObjects()
     local deletedCount = 0
     
     for _, obj in ipairs(coldPlungeObjects) do
-        if obj.Name == "Cold Plunge" then
+        if obj.Name == "Cold Plunge" or obj.Name == "Umbrella" then
             obj:Destroy()
             deletedCount = deletedCount + 1
             print("Deleted Cold Plunge object: " .. obj:GetFullName())
@@ -1003,7 +1003,7 @@ local function showHelp()
     -- Split help into multiple messages to avoid character limits
     sendChatMessage("=== BOT HELP ===")
     task.wait(2.5)
-    sendChatMessage("Whitelist Commands (Owner Only): !wl username, !uwl username, !wlstatus")
+    sendChatMessage("Whitelist Commands (Owner Only): !wl username, !uwl username")
     task.wait(2.5)
     sendChatMessage("Movement: !b (teleport to you), !o (orbit you), !so (stop orbit)")
     task.wait(2.5)
@@ -1015,9 +1015,7 @@ local function showHelp()
     task.wait(2.5)
     sendChatMessage("Fun: !e text (echo), !an username (annoy), !san (stop annoy)")
     task.wait(2.5)
-    sendChatMessage("Auto-features: Auto-whitelist for NanoReidedo, CF_P7, kupcake3245")
-    task.wait(2.5)
-    sendChatMessage("Available crafts: " .. table.concat(getCraftableItems(), ", "))
+    sendChatMessage("bot made by rec - ty to all buyers :D")
 end
 
 -- Function to get list of craftable items
