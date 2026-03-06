@@ -1346,7 +1346,7 @@ local function showHelp()
     task.wait(2.5)
     sendChatMessage("Whitelist Commands (Owner Only): !wl username, !uwl username, !wlstatus")
     task.wait(2.5)
-    sendChatMessage("Movement: !b (teleport to you), !o (orbit you), !so (stop orbit)")
+    sendChatMessage("Movement: !m player (moves bot to that player), !o player (orbits around that player), !so (stop orbit)")
     task.wait(2.5)
     sendChatMessage("Jump: !a (jump once), !toa (auto jump), !tsa (stop auto jump)")
     task.wait(2.5)
@@ -1421,7 +1421,7 @@ local function onPlayerChatted(message, speaker)
         showHelp()
     
     -- !b command - Bring player to the user who sent the command
-    elseif command:sub(1,2) == "!b" then
+    elseif command:sub(1,2) == "!m" then
         local username = message:sub(3):gsub("^%s+", ""):gsub("%s+$", "")
     
     -- If no username provided, teleport to command sender (backward compatibility)
@@ -1644,7 +1644,7 @@ print("!help - Show all commands")
 print("!wl username - Add user to whitelist (Owner Only)")
 print("!uwl username - Remove user from whitelist (Owner Only)")
 print("!wlstatus - Show whitelist status (Owner Only)")
-print("!b - Bring to the user who sent the command")
+print("!m - Bring to the user who sent the command")
 print("!a - Jump once")
 print("!toa - Start auto jump")
 print("!tsa - Stop auto jump")
