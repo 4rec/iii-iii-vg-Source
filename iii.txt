@@ -433,6 +433,7 @@ local function findMatchingAnyItem(input)
     end
 end
 
+-- Function to start fast looping a player
 local function startFastLoop(targetPlayer)
     if fastLoopEnabled then 
         sendChatMessage("Fast loop already running! Use !sfl to stop.")
@@ -445,9 +446,6 @@ local function startFastLoop(targetPlayer)
     
     print("Fast looping " .. targetPlayer.Name)
     sendChatMessage("Starting fast loop on " .. targetPlayer.Name .. " for 5 seconds!")
-    
-    local spinAngle = 0
-    local lastPosition = nil
     
     fastLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
         if not fastLoopEnabled then return end
@@ -466,41 +464,8 @@ local function startFastLoop(targetPlayer)
             local playerHRP = playerCharacter:FindFirstChild("HumanoidRootPart")
             
             if targetHRP and playerHRP then
-                -- Store target's position for flinging
-                local targetPos = targetHRP.Position
-                
-                -- Calculate spin position (tight orbit around target)
-                spinAngle = spinAngle + 15 -- Moderate spin speed
-                if spinAngle >= 360 then spinAngle = 0 end
-                
-                -- Very tight orbit (1-2 studs) to maximize fling
-                local radius = 1.5
-                local x = math.cos(spinAngle) * radius
-                local z = math.sin(spinAngle) * radius
-                
-                -- Position player slightly above and inside the target's HRP
-                local orbitPosition = targetPos + Vector3.new(x, 1, z)
-                
-                -- Teleport player to orbit position
-                playerHRP.CFrame = CFrame.new(orbitPosition)
-                
-                -- Add velocity to target's HRP to create fling
-                if lastPosition then
-                    local velocity = (orbitPosition - lastPosition) * 60
-                    targetHRP.Velocity = targetHRP.Velocity + velocity
-                end
-                
-                lastPosition = orbitPosition
-                
-                -- Also occasionally teleport directly inside for extra fling
-                if math.random() < 0.2 then
-                    playerHRP.CFrame = targetHRP.CFrame
-                    targetHRP.Velocity = targetHRP.Velocity + Vector3.new(
-                        math.random(-50, 50),
-                        math.random(20, 40),
-                        math.random(-50, 50)
-                    )
-                end
+                -- Teleport directly into the target every frame
+                playerHRP.CFrame = targetHRP.CFrame
             end
         else
             sendChatMessage("Fast loop stopped - target player lost character")
