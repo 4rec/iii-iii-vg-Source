@@ -19,7 +19,10 @@ whitelistedUsers[WHITELISTED_USERNAME] = true
 -- Auto-whitelist users
 local AUTO_WHITELIST_USERS = {
     "Tyler_jimmykam67Bsf",
-    "kupcake3245"
+    "kupcake3245",
+    "dhaain201456",
+    "Quintasey",
+    "Xxskyxd3"
 }
 
 -- Crafting recipes (UPDATED WITH NEW RECIPES)
