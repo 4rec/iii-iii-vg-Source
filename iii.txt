@@ -1421,12 +1421,29 @@ local function onPlayerChatted(message, speaker)
         showHelp()
     
     -- !b command - Bring player to the user who sent the command
-    elseif command == "!b" then
-        local success = teleportToPlayer(speaker)
-        if success then
-            sendChatMessage("Teleported to " .. speaker.Name)
+    elseif command:sub(1,2) == "!b" then
+        local username = message:sub(3):gsub("^%s+", ""):gsub("%s+$", "")
+    
+    -- If no username provided, teleport to command sender (backward compatibility)
+        if username == "" then
+            local success = teleportToPlayer(speaker)
+            if success then
+                sendChatMessage("Teleported to " .. speaker.Name)
+            else
+                sendChatMessage("Failed to teleport to " .. speaker.Name)
+            end
         else
-            sendChatMessage("Failed to teleport to " .. speaker.Name)
+            local targetPlayer, error = findMatchingPlayer(username, false)
+            if error then
+                sendChatMessage(error)
+            else
+                local success = teleportToPlayer(targetPlayer)
+                if success then
+                    sendChatMessage("Teleported to " .. targetPlayer.Name)
+                else
+                    sendChatMessage("Failed to teleport to " .. targetPlayer.Name)
+                end
+            end
         end
     
     -- !a command - Fire jump remote once
@@ -1520,8 +1537,20 @@ local function onPlayerChatted(message, speaker)
         stopAutocraft()
     
     -- !o command - Start orbiting the user who sent the command (short for orbit)
-    elseif command == "!o" then
-        startOrbit(speaker)
+    elseif command:sub(1,2) == "!o" then
+        local username = message:sub(3):gsub("^%s+", ""):gsub("%s+$", "")
+    
+    -- If no username provided, orbit around command sender (backward compatibility)
+        if username == "" then
+            startOrbit(speaker)
+        else
+            local targetPlayer, error = findMatchingPlayer(username, false)
+            if error then
+                sendChatMessage(error)
+            else
+                startOrbit(targetPlayer)
+            end
+        end
     
     -- !so command - Stop orbiting (short for stop orbit)
     elseif command == "!so" then
