@@ -240,64 +240,7 @@ local function findMatchingPlayer(input, excludeSelf)
     end
 end
 
--- Function to find best matching item name
-local function findMatchingItem(input)
-    if not input or input == "" then
-        return nil, "Please provide an item name"
-    end
-    
-    input = input:lower()
-    local matches = {}
-    
-    -- Get all craftable items
-    local craftableItems = getCraftableItems()
-    
-    for _, itemName in ipairs(craftableItems) do
-        local itemNameLower = itemName:lower()
-        
-        -- Check if input matches start of item name
-        if itemNameLower:sub(1, #input) == input then
-            table.insert(matches, itemName)
-        end
-    end
-    
-    -- Sort matches alphabetically
-    table.sort(matches)
-    
-    if #matches == 0 then
-        return nil, "No items found matching '" .. input .. "'"
-    elseif #matches == 1 then
-        return matches[1], nil
-    else
-        -- Multiple matches found
-        local matchList = table.concat(matches, ", ")
-        return nil, "Multiple items found: " .. matchList .. ". Please be more specific."
-    end
-end
 
--- Function to parse buy command with autocomplete
-local function parseBuyCommandWithAutocomplete(message)
-    -- Remove the command prefix and trim spaces
-    local cleanMessage = message:gsub("^!%a+%s*", ""):gsub("%s+", " ")
-    
-    -- Look for pattern: number-hyphen-text
-    local amount, itemInput = cleanMessage:match("^(%d+)%-(.+)$")
-    
-    if amount and itemInput then
-        -- Clean up the item input (remove extra spaces)
-        itemInput = itemInput:gsub("^%s+", ""):gsub("%s+$", "")
-        
-        -- Try to find matching item
-        local matchedItem, error = findMatchingItem(itemInput)
-        if error then
-            return nil, nil, error
-        end
-        
-        return tonumber(amount), matchedItem, nil
-    end
-    
-    return nil, nil, "Invalid format. Use: amount-itemname"
-end
 
 -- Function to send chat message (with cooldown protection)
 local lastChatTime = 0
@@ -1347,6 +1290,65 @@ local function onPlayerAdded(newPlayer)
     newPlayer.Chatted:Connect(function(message)
         onPlayerChatted(message, newPlayer)
     end)
+end
+
+-- Function to find best matching item name
+local function findMatchingItem(input)
+    if not input or input == "" then
+        return nil, "Please provide an item name"
+    end
+    
+    input = input:lower()
+    local matches = {}
+    
+    -- Get all craftable items
+    local craftableItems = getCraftableItems()
+    
+    for _, itemName in ipairs(craftableItems) do
+        local itemNameLower = itemName:lower()
+        
+        -- Check if input matches start of item name
+        if itemNameLower:sub(1, #input) == input then
+            table.insert(matches, itemName)
+        end
+    end
+    
+    -- Sort matches alphabetically
+    table.sort(matches)
+    
+    if #matches == 0 then
+        return nil, "No items found matching '" .. input .. "'"
+    elseif #matches == 1 then
+        return matches[1], nil
+    else
+        -- Multiple matches found
+        local matchList = table.concat(matches, ", ")
+        return nil, "Multiple items found: " .. matchList .. ". Please be more specific."
+    end
+end
+
+-- Function to parse buy command with autocomplete
+local function parseBuyCommandWithAutocomplete(message)
+    -- Remove the command prefix and trim spaces
+    local cleanMessage = message:gsub("^!%a+%s*", ""):gsub("%s+", " ")
+    
+    -- Look for pattern: number-hyphen-text
+    local amount, itemInput = cleanMessage:match("^(%d+)%-(.+)$")
+    
+    if amount and itemInput then
+        -- Clean up the item input (remove extra spaces)
+        itemInput = itemInput:gsub("^%s+", ""):gsub("%s+$", "")
+        
+        -- Try to find matching item
+        local matchedItem, error = findMatchingItem(itemInput)
+        if error then
+            return nil, nil, error
+        end
+        
+        return tonumber(amount), matchedItem, nil
+    end
+    
+    return nil, nil, "Invalid format. Use: amount-itemname"
 end
 
 -- Set up event listeners for existing and new players
