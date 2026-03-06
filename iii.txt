@@ -352,14 +352,14 @@ local function findMatchingPlayer(input, excludeSelf)
     end
 end
 
--- Function to find best matching item from all available items (for !bd)
 local function findMatchingAnyItem(input)
     if not input or input == "" then
         return nil, "Please provide an item name"
     end
     
     input = input:lower()
-    local matches = {}
+    local exactMatches = {}
+    local partialMatches = {}
     
     -- Get all available items
     local allItems = getAllItems()
@@ -367,22 +367,35 @@ local function findMatchingAnyItem(input)
     for _, itemName in ipairs(allItems) do
         local itemNameLower = itemName:lower()
         
+        -- Check for exact match (case insensitive)
+        if itemNameLower == input then
+            table.insert(exactMatches, itemName)
         -- Check if input matches start of item name
-        if itemNameLower:sub(1, #input) == input then
-            table.insert(matches, itemName)
+        elseif itemNameLower:sub(1, #input) == input then
+            table.insert(partialMatches, itemName)
         end
     end
     
     -- Sort matches alphabetically
-    table.sort(matches)
+    table.sort(exactMatches)
+    table.sort(partialMatches)
     
-    if #matches == 0 then
+    -- Prioritize exact matches
+    if #exactMatches == 1 then
+        return exactMatches[1], nil
+    elseif #exactMatches > 1 then
+        local matchList = table.concat(exactMatches, ", ")
+        return nil, "Multiple exact matches found: " .. matchList .. ". Please be more specific."
+    end
+    
+    -- If no exact matches, use partial matches
+    if #partialMatches == 0 then
         return nil, "No items found matching '" .. input .. "'"
-    elseif #matches == 1 then
-        return matches[1], nil
+    elseif #partialMatches == 1 then
+        return partialMatches[1], nil
     else
-        -- Multiple matches found
-        local matchList = table.concat(matches, ", ")
+        -- Multiple partial matches found
+        local matchList = table.concat(partialMatches, ", ")
         return nil, "Multiple items found: " .. matchList .. ". Please be more specific."
     end
 end
@@ -394,7 +407,8 @@ local function findMatchingCraftableItem(input)
     end
     
     input = input:lower()
-    local matches = {}
+    local exactMatches = {}
+    local partialMatches = {}
     
     -- Get all craftable items
     local craftableItems = getCraftableItems()
@@ -402,22 +416,35 @@ local function findMatchingCraftableItem(input)
     for _, itemName in ipairs(craftableItems) do
         local itemNameLower = itemName:lower()
         
+        -- Check for exact match (case insensitive)
+        if itemNameLower == input then
+            table.insert(exactMatches, itemName)
         -- Check if input matches start of item name
-        if itemNameLower:sub(1, #input) == input then
-            table.insert(matches, itemName)
+        elseif itemNameLower:sub(1, #input) == input then
+            table.insert(partialMatches, itemName)
         end
     end
     
     -- Sort matches alphabetically
-    table.sort(matches)
+    table.sort(exactMatches)
+    table.sort(partialMatches)
     
-    if #matches == 0 then
+    -- Prioritize exact matches
+    if #exactMatches == 1 then
+        return exactMatches[1], nil
+    elseif #exactMatches > 1 then
+        local matchList = table.concat(exactMatches, ", ")
+        return nil, "Multiple exact matches found: " .. matchList .. ". Please be more specific."
+    end
+    
+    -- If no exact matches, use partial matches
+    if #partialMatches == 0 then
         return nil, "No craftable items found matching '" .. input .. "'"
-    elseif #matches == 1 then
-        return matches[1], nil
+    elseif #partialMatches == 1 then
+        return partialMatches[1], nil
     else
-        -- Multiple matches found
-        local matchList = table.concat(matches, ", ")
+        -- Multiple partial matches found
+        local matchList = table.concat(partialMatches, ", ")
         return nil, "Multiple craftable items found: " .. matchList .. ". Please be more specific."
     end
 end
