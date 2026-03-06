@@ -981,9 +981,9 @@ local function startBuyDrop(amount, itemName, commandUser)
         end
         
         if isInDropped and descendant:IsA("Part") then
-            -- Check if this dropped item has an Owner and matches our item
-            local owner = descendant:FindFirstChild("Owner")
-            if owner and owner.Value == player and descendant.Name == itemName then
+            -- Check if this dropped item has an Owner ObjectValue and matches our item
+            local ownerObject = descendant:FindFirstChild("Owner")
+            if ownerObject and ownerObject:IsA("ObjectValue") and ownerObject.Value == player and descendant.Name == itemName then
                 print("Detected dropped item: " .. descendant:GetFullName())
                 
                 -- Delete the dropped item
