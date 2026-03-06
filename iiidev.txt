@@ -938,8 +938,7 @@ local function stopAutoJump()
     sendChatMessage("Auto jump stopped!")
 end
 
--- Function to start buy/drop loop
--- Function to start buy/drop loop with listener-based approach
+-- Function to start buy/drop loop with Dropped item detection
 local function startBuyDrop(amount, itemName, commandUser)
     if buyDropEnabled then 
         print("Buy/Drop already running! Use !sbd to stop first.")
@@ -951,7 +950,7 @@ local function startBuyDrop(amount, itemName, commandUser)
     currentPhase = "buying"
     local count = 0
     local completed = false
-    local dropConnections = {}
+    local droppedConnection = nil
     
     -- Store the command user for teleporting back
     currentCommandUser = commandUser
@@ -962,90 +961,95 @@ local function startBuyDrop(amount, itemName, commandUser)
     -- Create drop platform relative to command user
     createDropPlatform(commandUser)
     
-    -- Function to cleanup all connections
-    local function cleanupConnections()
-        for _, conn in ipairs(dropConnections) do
-            conn:Disconnect()
+    -- Function to handle dropped item detection
+    local function onDroppedItemAdded(descendant)
+        if not buyDropEnabled then return end
+        
+        -- Check if this is a dropped item in the Dropped folder
+        local droppedFolder = workspace:FindFirstChild("Dropped")
+        if not droppedFolder then return end
+        
+        -- Check if the descendant is inside the Dropped folder
+        local isInDropped = false
+        local parent = descendant.Parent
+        while parent do
+            if parent == droppedFolder then
+                isInDropped = true
+                break
+            end
+            parent = parent.Parent
         end
-        dropConnections = {}
+        
+        if isInDropped and descendant:IsA("Part") then
+            -- Check if this dropped item has an Owner and matches our item
+            local owner = descendant:FindFirstChild("Owner")
+            if owner and owner.Value == player and descendant.Name == itemName then
+                print("Detected dropped item: " .. descendant:GetFullName())
+                
+                -- Delete the dropped item
+                descendant:Destroy()
+                print("Deleted dropped item: " .. itemName)
+                
+                -- Increment count and check if we're done
+                count = count + 1
+                print("Dropped and deleted: " .. itemName .. " (" .. count .. "/" .. amount .. ")")
+                
+                -- Send progress messages at 50% and 100%
+                local progress = count / amount
+                if progress == 0.5 then
+                    sendChatMessage("Buy/Drop 50% complete!")
+                elseif progress == 1.0 then
+                    sendChatMessage("Buy/Drop 100% complete!")
+                end
+                
+                -- Check if we're done
+                if count >= amount then
+                    sendChatMessage("Buy/Drop completed! " .. amount .. "x " .. itemName)
+                    print("Buy/Drop completed!")
+                    -- Teleport back to the user who sent the command
+                    if currentCommandUser then
+                        teleportToPlayer(currentCommandUser)
+                        sendChatMessage("Returned to " .. currentCommandUser.Name)
+                    end
+                    stopBuyDrop()
+                else
+                    -- Continue with next cycle
+                    currentPhase = "buying"
+                end
+            end
+        end
     end
     
-    -- Function to handle the next drop
-    local function doNextDrop()
-        if not buyDropEnabled or completed then return end
+    -- Set up the dropped item listener
+    droppedConnection = workspace.DescendantAdded:Connect(onDroppedItemAdded)
+    
+    buyDropConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not buyDropEnabled then
+            if droppedConnection then
+                droppedConnection:Disconnect()
+            end
+            cleanupDropPlatform()
+            return 
+        end
         
-        if count < amount then
-            -- Buy phase first
-            currentPhase = "buying"
-            if teleportToDropPlatform() then
+        if completed then return end
+        
+        if currentPhase == "buying" then
+            if count < amount then
+                -- Buy phase
                 if buyItem(itemName) then
                     print("Bought: " .. itemName .. " (" .. (count + 1) .. "/" .. amount .. ")")
                 end
-                currentPhase = "waiting_for_drop"
-                
-                -- Now wait for the item to appear in workspace.Dropped
-                local droppedFolder = workspace:FindFirstChild("Dropped")
-                if not droppedFolder then
-                    warn("Dropped folder not found in workspace!")
-                    stopBuyDrop()
-                    return
+                currentPhase = "dropping"
+            end
+        elseif currentPhase == "dropping" then
+            -- Drop phase - teleport to platform first
+            if teleportToDropPlatform() then
+                -- Drop phase
+                if dropItem(itemName) then
+                    print("Dropped: " .. itemName)
                 end
-                
-                -- Create a one-time listener for this specific drop
-                local dropListener
-                dropListener = droppedFolder.ChildAdded:Connect(function(child)
-                    -- Check if this is our item
-                    if child.Name == itemName then
-                        -- Check if it has an Owner value
-                        local ownerValue = child:FindFirstChild("Owner")
-                        if ownerValue and ownerValue.Value == player.Name then
-                            -- This is our dropped item!
-                            print("Detected dropped item: " .. itemName .. " (" .. (count + 1) .. "/" .. amount .. ")")
-                            
-                            -- Disconnect this specific listener
-                            dropListener:Disconnect()
-                            
-                            -- Send progress messages
-                            local progress = (count + 1) / amount
-                            if progress >= 0.5 and progress < 0.51 and count + 1 == math.floor(amount * 0.5) then
-                                sendChatMessage("Buy/Drop 50% complete!")
-                            elseif count + 1 == amount then
-                                sendChatMessage("Buy/Drop 100% complete!")
-                            end
-                            
-                            -- Increment count
-                            count = count + 1
-                            
-                            if count >= amount then
-                                -- Finished all cycles
-                                completed = true
-                                sendChatMessage("Buy/Drop completed! " .. amount .. "x " .. itemName)
-                                print("Buy/Drop completed!")
-                                -- Teleport back to the user who sent the command
-                                if currentCommandUser then
-                                    teleportToPlayer(currentCommandUser)
-                                    sendChatMessage("Returned to " .. currentCommandUser.Name)
-                                end
-                                stopBuyDrop()
-                            else
-                                -- Do next drop after a short delay to avoid overwhelming
-                                task.wait(0.5)
-                                doNextDrop()
-                            end
-                        end
-                    end
-                end)
-                
-                -- Store the connection
-                table.insert(dropConnections, dropListener)
-                
-                -- Set a timeout in case the drop never appears
-                task.delay(10, function()
-                    if buyDropEnabled and currentPhase == "waiting_for_drop" and count < amount then
-                        sendChatMessage("Drop timeout - item may not have spawned properly")
-                        doNextDrop() -- Try again
-                    end
-                end)
+                currentPhase = "waiting_for_delete"
             else
                 warn("Failed to teleport to drop platform!")
                 sendChatMessage("Buy/Drop failed - teleport error!")
@@ -1057,20 +1061,11 @@ local function startBuyDrop(amount, itemName, commandUser)
                 stopBuyDrop()
             end
         end
-    end
-    
-    -- Start the first drop
-    doNextDrop()
-    
-    -- Store the cleanup function for when we stop
-    buyDropConnection = {
-        Disconnect = function()
-            cleanupConnections()
-        end
-    }
+        -- Waiting_for_delete phase is handled by the dropped item listener
+    end)
 end
 
--- Updated stop function
+-- Function to stop buy/drop immediately
 local function stopBuyDrop()
     if not buyDropEnabled then return end
     
