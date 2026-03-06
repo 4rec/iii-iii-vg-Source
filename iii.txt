@@ -180,8 +180,8 @@ local fastLoopEnabled = false
 local fastLoopConnection = nil
 local fastLoopTarget = nil
 local fastLoopStartTime = 0
-local fastLoopDuration = 5 -- 5 seconds
-local flingPower = 3000
+local fastLoopDuration = 10 -- 5 seconds
+local flingPower = 6000
 
 -- Variables for Cold Plunge monitor
 local coldPlungeMonitor = nil
