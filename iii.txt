@@ -1218,7 +1218,7 @@ end
 -- Function to show help
 local function showHelp()
     -- Split help into multiple messages to avoid character limits
-    sendChatMessage("=== BOT HELP ===")
+    sendChatMessage("~ Bot Help ~")
     task.wait(2.5)
     sendChatMessage("Whitelist Commands (Owner Only): !wl username, !uwl username, !wlstatus")
     task.wait(2.5)
@@ -1232,9 +1232,7 @@ local function showHelp()
     task.wait(2.5)
     sendChatMessage("Fun: !e text (echo), !an username (annoy), !san (stop annoy)")
     task.wait(2.5)
-    sendChatMessage("Auto-features: Auto-whitelist for NanoReidedo, CF_P7, kupcake3245")
-    task.wait(2.5)
-    sendChatMessage("All items available for !bd command")
+    sendChatMessage("bot made by rec ~ ty for buying :P")
 end
 
 -- Function to handle player joining for immediate whitelisting
