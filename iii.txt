@@ -322,14 +322,14 @@ local function findMatchingItem(input)
         return nil, "Please provide an item name"
     end
     
-    input = input:lower()
+    input = input
     local matches = {}
     
     -- Get all craftable items
     local craftableItems = getCraftableItems()
     
     for _, itemName in ipairs(craftableItems) do
-        local itemNameLower = itemName:lower()
+        local itemNameLower = itemName
         
         -- Check if input matches start of item name
         if itemNameLower:sub(1, #input) == input then
