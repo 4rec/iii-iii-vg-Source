@@ -446,8 +446,24 @@ local function startFastLoop(targetPlayer)
     
     print("Fast looping " .. targetPlayer.Name)
     sendChatMessage("Starting fast loop on " .. targetPlayer.Name .. " for 5 seconds!")
-
-    local spinAngle = 0
+    
+    -- Add BodyThrust with power 30
+    local playerCharacter = player.Character
+    if playerCharacter and playerCharacter:FindFirstChild("HumanoidRootPart") then
+        local hrp = playerCharacter.HumanoidRootPart
+        
+        -- Remove any existing BodyThrust
+        local existing = hrp:FindFirstChildOfClass("BodyThrust")
+        if existing then
+            existing:Destroy()
+        end
+        
+        -- Create new BodyThrust with power 30
+        fastLoopBodyThrust = Instance.new("BodyThrust")
+        fastLoopBodyThrust.Parent = hrp
+        fastLoopBodyThrust.Force = Vector3.new(3000, 0, 3000) -- power 30 = 3000 force
+        fastLoopBodyThrust.Location = hrp.Position
+    end
     
     fastLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
         if not fastLoopEnabled then return end
@@ -466,11 +482,13 @@ local function startFastLoop(targetPlayer)
             local playerHRP = playerCharacter:FindFirstChild("HumanoidRootPart")
             
             if targetHRP and playerHRP then
-                -- Teleport directly into the target every frame
-                spingAngle = spinAngle + 45
-                if spinAngle >= 360 then spinAngle = 0 end
-
-                playerHRP.CFrame = targetHRP.CFrame * CFrame.Angles(0, math.rad(spinAngle), 0)
+                -- Loop-goto: teleport directly into target every frame
+                playerHRP.CFrame = targetHRP.CFrame
+                
+                -- Update BodyThrust location
+                if fastLoopBodyThrust and fastLoopBodyThrust.Parent then
+                    fastLoopBodyThrust.Location = playerHRP.Position
+                end
             end
         else
             sendChatMessage("Fast loop stopped - target player lost character")
@@ -487,6 +505,12 @@ local function stopFastLoop()
     if fastLoopConnection then
         fastLoopConnection:Disconnect()
         fastLoopConnection = nil
+    end
+    
+    -- Remove BodyThrust
+    if fastLoopBodyThrust and fastLoopBodyThrust.Parent then
+        fastLoopBodyThrust:Destroy()
+        fastLoopBodyThrust = nil
     end
     
     -- Teleport back to command user
