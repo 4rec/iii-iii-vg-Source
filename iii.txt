@@ -446,6 +446,8 @@ local function startFastLoop(targetPlayer)
     
     print("Fast looping " .. targetPlayer.Name)
     sendChatMessage("Starting fast loop on " .. targetPlayer.Name .. " for 5 seconds!")
+
+    local spinAngle = 0
     
     fastLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
         if not fastLoopEnabled then return end
@@ -465,7 +467,10 @@ local function startFastLoop(targetPlayer)
             
             if targetHRP and playerHRP then
                 -- Teleport directly into the target every frame
-                playerHRP.CFrame = targetHRP.CFrame
+                spingAngle = spinAngle + 45
+                if spinAngle >= 360 then spinAngle = 0 end
+
+                playerHRP.CFrame = targetHRP.CFrame * CFrame.Angles(0, math.rad(spinAngle), 0)
             end
         else
             sendChatMessage("Fast loop stopped - target player lost character")
