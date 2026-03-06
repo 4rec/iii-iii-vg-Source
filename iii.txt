@@ -181,6 +181,7 @@ local fastLoopConnection = nil
 local fastLoopTarget = nil
 local fastLoopStartTime = 0
 local fastLoopDuration = 5 -- 5 seconds
+local flingPower = 3000
 
 -- Variables for Cold Plunge monitor
 local coldPlungeMonitor = nil
@@ -447,23 +448,31 @@ local function startFastLoop(targetPlayer)
     print("Fast looping " .. targetPlayer.Name)
     sendChatMessage("Starting fast loop on " .. targetPlayer.Name .. " for 5 seconds!")
     
-    -- Add BodyThrust with power 30
-    local playerCharacter = player.Character
-    if playerCharacter and playerCharacter:FindFirstChild("HumanoidRootPart") then
-        local hrp = playerCharacter.HumanoidRootPart
+    -- Create BodyThrust for flinging (exactly like the script)
+    local bambam = Instance.new("BodyThrust")
+    bambam.Parent = player.Character.HumanoidRootPart
+    bambam.Force = Vector3.new(flingPower, 0, flingPower)
+    bambam.Location = player.Character.HumanoidRootPart.Position
+    
+    -- Disable collisions (exactly like the script)
+    game:GetService('RunService').Stepped:Connect(function()
+        if not fastLoopEnabled then return end
         
-        -- Remove any existing BodyThrust
-        local existing = hrp:FindFirstChildOfClass("BodyThrust")
-        if existing then
-            existing:Destroy()
+        local char = player.Character
+        if char and char.Humanoid then
+            if char.Humanoid.RigType == Enum.HumanoidRigType.R6 then
+                char.Head.CanCollide = false
+                char.Torso.CanCollide = false
+                char["Left Leg"].CanCollide = false
+                char["Right Leg"].CanCollide = false
+            else
+                char.Head.CanCollide = false
+                char.UpperTorso.CanCollide = false
+                char.LowerTorso.CanCollide = false
+                char.HumanoidRootPart.CanCollide = false
+            end
         end
-        
-        -- Create new BodyThrust with power 30
-        fastLoopBodyThrust = Instance.new("BodyThrust")
-        fastLoopBodyThrust.Parent = hrp
-        fastLoopBodyThrust.Force = Vector3.new(3000, 0, 3000) -- power 30 = 3000 force
-        fastLoopBodyThrust.Location = hrp.Position
-    end
+    end)
     
     fastLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
         if not fastLoopEnabled then return end
@@ -482,12 +491,12 @@ local function startFastLoop(targetPlayer)
             local playerHRP = playerCharacter:FindFirstChild("HumanoidRootPart")
             
             if targetHRP and playerHRP then
-                -- Loop-goto: teleport directly into target every frame
+                -- Teleport directly into target every frame
                 playerHRP.CFrame = targetHRP.CFrame
                 
-                -- Update BodyThrust location
-                if fastLoopBodyThrust and fastLoopBodyThrust.Parent then
-                    fastLoopBodyThrust.Location = playerHRP.Position
+                -- Update BodyThrust position (exactly like the script)
+                if playerHRP:FindFirstChild("BodyThrust") then
+                    playerHRP.BodyThrust.Location = playerHRP.Position
                 end
             end
         else
@@ -507,10 +516,13 @@ local function stopFastLoop()
         fastLoopConnection = nil
     end
     
-    -- Remove BodyThrust
-    if fastLoopBodyThrust and fastLoopBodyThrust.Parent then
-        fastLoopBodyThrust:Destroy()
-        fastLoopBodyThrust = nil
+    -- Remove BodyThrust (exactly like the script)
+    local char = player.Character
+    if char and char.HumanoidRootPart then
+        local bodyThrust = char.HumanoidRootPart:FindFirstChild("BodyThrust")
+        if bodyThrust then
+            bodyThrust:Remove()
+        end
     end
     
     -- Teleport back to command user
