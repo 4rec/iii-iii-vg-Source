@@ -181,7 +181,7 @@ local fastLoopConnection = nil
 local fastLoopTarget = nil
 local fastLoopStartTime = 0
 local fastLoopDuration = 5 -- 5 seconds
-local flingPower = 1200
+local flingPower = 3000
 
 -- Variables for Cold Plunge monitor
 local coldPlungeMonitor = nil
@@ -455,7 +455,7 @@ local function startFastLoop(targetPlayer)
     bambam.Location = player.Character.HumanoidRootPart.Position
     
     -- Disable collisions (exactly like the script)
-    game:GetService('RunService').Stepped:Connect(function()
+    steppedConnection = game:GetService('RunService').Stepped:Connect(function()
         if not fastLoopEnabled then return end
         
         local char = player.Character
@@ -479,7 +479,7 @@ local function startFastLoop(targetPlayer)
         
         -- Check if 5 seconds have passed
         if tick() - fastLoopStartTime >= fastLoopDuration then
-            stopFastLoop()
+            stopFastLoop(true) -- Pass true to indicate timed completion
             return
         end
         
@@ -501,19 +501,25 @@ local function startFastLoop(targetPlayer)
             end
         else
             sendChatMessage("Fast loop stopped - target player lost character")
-            stopFastLoop()
+            stopFastLoop(false)
         end
     end)
 end
 
 -- Function to stop fast loop
-local function stopFastLoop()
+local function stopFastLoop(timedOut)
     if not fastLoopEnabled then return end
     
     fastLoopEnabled = false
+    
     if fastLoopConnection then
         fastLoopConnection:Disconnect()
         fastLoopConnection = nil
+    end
+    
+    if steppedConnection then
+        steppedConnection:Disconnect()
+        steppedConnection = nil
     end
     
     -- Remove BodyThrust (exactly like the script)
@@ -525,12 +531,32 @@ local function stopFastLoop()
         end
     end
     
-    -- Teleport back to command user
-    if currentCommandUser then
-        teleportToPlayer(currentCommandUser)
-        sendChatMessage("Fast loop ended! Returned to " .. currentCommandUser.Name)
+    -- Kill the local player to completely stop all momentum
+    if char and char.Humanoid then
+        char.Humanoid.Health = 0
+    end
+    
+    -- Only respawn and teleport back if this was a timed completion
+    if timedOut then
+        -- Wait for respawn
+        local respawnConnection = nil
+        respawnConnection = player.CharacterAdded:Connect(function(newChar)
+            -- Teleport back to command user after respawn
+            if currentCommandUser then
+                task.wait(0.5) -- Wait for character to fully load
+                teleportToPlayer(currentCommandUser)
+                sendChatMessage("Fast loop ended! Returned to " .. currentCommandUser.Name)
+            end
+            respawnConnection:Disconnect()
+        end)
     else
-        sendChatMessage("Fast loop ended!")
+        -- Manual stop, just teleport back
+        if currentCommandUser then
+            teleportToPlayer(currentCommandUser)
+            sendChatMessage("Fast loop stopped! Returned to " .. currentCommandUser.Name)
+        else
+            sendChatMessage("Fast loop stopped!")
+        end
     end
     
     fastLoopTarget = nil
