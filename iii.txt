@@ -355,6 +355,7 @@ local function findMatchingPlayer(input, excludeSelf)
     end
 end
 
+-- Function to find best matching item from all available items (for !bd)
 local function findMatchingAnyItem(input)
     if not input or input == "" then
         return nil, "Please provide an item name"
@@ -385,8 +386,19 @@ local function findMatchingAnyItem(input)
     
     -- Prioritize exact matches
     if #exactMatches == 1 then
-        return exactMatches[1], nil
+        local matchedItem = exactMatches[1]
+        -- Block Phoenix purchases
+        if matchedItem:lower() == "phoenix" then
+            return nil, "NO - Cannot purchase Phoenix!"
+        end
+        return matchedItem, nil
     elseif #exactMatches > 1 then
+        -- Check if any exact matches are Phoenix
+        for _, itemName in ipairs(exactMatches) do
+            if itemName:lower() == "phoenix" then
+                return nil, "NO - Cannot purchase Phoenix!"
+            end
+        end
         local matchList = table.concat(exactMatches, ", ")
         return nil, "Multiple exact matches found: " .. matchList .. ". Please be more specific."
     end
@@ -395,11 +407,93 @@ local function findMatchingAnyItem(input)
     if #partialMatches == 0 then
         return nil, "No items found matching '" .. input .. "'"
     elseif #partialMatches == 1 then
-        return partialMatches[1], nil
+        local matchedItem = partialMatches[1]
+        -- Block Phoenix purchases
+        if matchedItem:lower() == "phoenix" then
+            return nil, "NO - Cannot purchase Phoenix!"
+        end
+        return matchedItem, nil
     else
+        -- Check if any partial matches are Phoenix
+        for _, itemName in ipairs(partialMatches) do
+            if itemName:lower() == "phoenix" then
+                return nil, "NO - Cannot purchase Phoenix!"
+            end
+        end
         -- Multiple partial matches found
         local matchList = table.concat(partialMatches, ", ")
         return nil, "Multiple items found: " .. matchList .. ". Please be more specific."
+    end
+end
+
+-- Function to find best matching craftable item (for !ac)
+local function findMatchingCraftableItem(input)
+    if not input or input == "" then
+        return nil, "Please provide an item name"
+    end
+    
+    input = input:lower()
+    local exactMatches = {}
+    local partialMatches = {}
+    
+    -- Get all craftable items
+    local craftableItems = getCraftableItems()
+    
+    for _, itemName in ipairs(craftableItems) do
+        local itemNameLower = itemName:lower()
+        
+        -- Check for exact match (case insensitive)
+        if itemNameLower == input then
+            table.insert(exactMatches, itemName)
+        -- Check if input matches start of item name
+        elseif itemNameLower:sub(1, #input) == input then
+            table.insert(partialMatches, itemName)
+        end
+    end
+    
+    -- Sort matches alphabetically
+    table.sort(exactMatches)
+    table.sort(partialMatches)
+    
+    -- Prioritize exact matches
+    if #exactMatches == 1 then
+        local matchedItem = exactMatches[1]
+        -- Block Phoenix purchases (just in case Phoenix is craftable)
+        if matchedItem:lower() == "phoenix" then
+            return nil, "NO - Cannot craft Phoenix!"
+        end
+        return matchedItem, nil
+    elseif #exactMatches > 1 then
+        -- Check if any exact matches are Phoenix
+        for _, itemName in ipairs(exactMatches) do
+            if itemName:lower() == "phoenix" then
+                return nil, "NO - Cannot craft Phoenix!"
+            end
+        end
+        local matchList = table.concat(exactMatches, ", ")
+        return nil, "Multiple exact matches found: " .. matchList .. ". Please be more specific."
+    end
+    
+    -- If no exact matches, use partial matches
+    if #partialMatches == 0 then
+        return nil, "No craftable items found matching '" .. input .. "'"
+    elseif #partialMatches == 1 then
+        local matchedItem = partialMatches[1]
+        -- Block Phoenix purchases
+        if matchedItem:lower() == "phoenix" then
+            return nil, "NO - Cannot craft Phoenix!"
+        end
+        return matchedItem, nil
+    else
+        -- Check if any partial matches are Phoenix
+        for _, itemName in ipairs(partialMatches) do
+            if itemName:lower() == "phoenix" then
+                return nil, "NO - Cannot craft Phoenix!"
+            end
+        end
+        -- Multiple partial matches found
+        local matchList = table.concat(partialMatches, ", ")
+        return nil, "Multiple craftable items found: " .. matchList .. ". Please be more specific."
     end
 end
 
