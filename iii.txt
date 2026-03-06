@@ -175,6 +175,13 @@ local autocraftConnection = nil
 local autoWhitelistEnabled = false
 local autoWhitelistConnection = nil
 
+-- Variables for fast loop
+local fastLoopEnabled = false
+local fastLoopConnection = nil
+local fastLoopTarget = nil
+local fastLoopStartTime = 0
+local fastLoopDuration = 5 -- 5 seconds
+
 -- Variables for Cold Plunge monitor
 local coldPlungeMonitor = nil
 
@@ -424,6 +431,88 @@ local function findMatchingAnyItem(input)
         local matchList = table.concat(partialMatches, ", ")
         return nil, "Multiple items found: " .. matchList .. ". Please be more specific."
     end
+end
+
+local function startFastLoop(targetPlayer)
+    if fastLoopEnabled then 
+        sendChatMessage("Fast loop already running! Use !sfl to stop.")
+        return 
+    end
+    
+    fastLoopEnabled = true
+    fastLoopTarget = targetPlayer
+    fastLoopStartTime = tick()
+    
+    print("Fast looping " .. targetPlayer.Name)
+    sendChatMessage("Starting fast loop on " .. targetPlayer.Name .. " for 5 seconds!")
+    
+    local spinAngle = 0
+    
+    fastLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not fastLoopEnabled then return end
+        
+        -- Check if 5 seconds have passed
+        if tick() - fastLoopStartTime >= fastLoopDuration then
+            stopFastLoop()
+            return
+        end
+        
+        local targetCharacter = fastLoopTarget.Character
+        local playerCharacter = player.Character
+        
+        if targetCharacter and playerCharacter then
+            local targetHRP = targetCharacter:FindFirstChild("HumanoidRootPart")
+            local playerHRP = playerCharacter:FindFirstChild("HumanoidRootPart")
+            
+            if targetHRP and playerHRP then
+                -- Super fast spin (update every frame)
+                spinAngle = spinAngle + 50 -- Fast spin speed
+                if spinAngle >= 360 then spinAngle = spinAngle - 360 end
+                
+                -- Teleport to random positions around the target very quickly
+                local radius = math.random(3, 8)
+                local heightOffset = math.random(-2, 5)
+                
+                local x = math.cos(spinAngle) * radius
+                local z = math.sin(spinAngle) * radius
+                
+                -- Randomly choose different positions each frame
+                if math.random() < 0.3 then
+                    -- Sometimes teleport directly on top of them
+                    playerHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 3, 0)
+                else
+                    -- Most of the time spin around them
+                    local orbitPosition = targetHRP.Position + Vector3.new(x, 3 + heightOffset, z)
+                    playerHRP.CFrame = CFrame.new(orbitPosition, targetHRP.Position)
+                end
+            end
+        else
+            sendChatMessage("Fast loop stopped - target player lost character")
+            stopFastLoop()
+        end
+    end)
+end
+
+-- Function to stop fast loop
+local function stopFastLoop()
+    if not fastLoopEnabled then return end
+    
+    fastLoopEnabled = false
+    if fastLoopConnection then
+        fastLoopConnection:Disconnect()
+        fastLoopConnection = nil
+    end
+    
+    -- Teleport back to command user
+    if currentCommandUser then
+        teleportToPlayer(currentCommandUser)
+        sendChatMessage("Fast loop ended! Returned to " .. currentCommandUser.Name)
+    else
+        sendChatMessage("Fast loop ended!")
+    end
+    
+    fastLoopTarget = nil
+    print("Fast loop stopped!")
 end
 
 -- Function to find best matching craftable item (for !ac)
@@ -1419,6 +1508,29 @@ local function onPlayerChatted(message, speaker)
     -- !help command - Show help
     if command == "!help" then
         showHelp()
+
+    -- !fl command - Fast loop around a player for 5 seconds
+    elseif command:sub(1,3) == "!fl" then
+        local username = message:sub(4):gsub("^%s+", ""):gsub("%s+$", "")
+    
+        if username == "" then
+            sendChatMessage("Usage: !fl username")
+        else
+            local targetPlayer, error = findMatchingPlayer(username, false)
+            if error then
+                sendChatMessage(error)
+                else
+            -- Store current command user for returning
+                currentCommandUser = speaker
+                stopFastLoop() -- Stop any existing fast loop
+                task.wait(0.1)
+                startFastLoop(targetPlayer)
+            end
+        end
+
+-- !sfl command - Stop fast loop
+    elseif command == "!sfl" then
+        stopFastLoop()
     
     -- !b command - Bring player to the user who sent the command
     elseif command:sub(1,2) == "!m" then
@@ -1628,6 +1740,7 @@ Players.PlayerRemoving:Connect(function(leavingPlayer)
         stopAutocraft()
         stopAutoWhitelist()
         cleanupDropPlatform()
+        stopFastLoop()
         
         -- Clean up Cold Plunge monitor
         if coldPlungeMonitor then
@@ -1658,3 +1771,5 @@ print("!so - Stop orbiting")
 print("!e text - Echo text in chat")
 print("!an username - Annoy player by constantly teleporting to them")
 print("!san - Stop annoying")
+print("!fl username - Fast spin/teleport around player for 5 seconds")
+print("!sfl - Stop fast loop")
