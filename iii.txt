@@ -175,6 +175,10 @@ local autoWhitelistConnection = nil
 -- Variables for Cold Plunge monitor
 local coldPlungeMonitor = nil
 
+-- Cache for all available items
+local allItemsCache = nil
+local lastItemsCacheTime = 0
+
 -- Function to check if a player is whitelisted
 local function isWhitelistedUser(speaker)
     return whitelistedUsers[speaker.Name] == true
@@ -252,6 +256,38 @@ local function getWhitelistStatus()
     return "Whitelisted users: " .. table.concat(users, ", ")
 end
 
+-- Function to get all available items from ReplicatedStorage.Items
+local function getAllItems()
+    -- Cache items for 30 seconds to avoid repeated scanning
+    if allItemsCache and tick() - lastItemsCacheTime < 30 then
+        return allItemsCache
+    end
+    
+    local items = {}
+    local itemsFolder = ReplicatedStorage:FindFirstChild("Items")
+    
+    if not itemsFolder then
+        warn("Items folder not found in ReplicatedStorage!")
+        return items
+    end
+    
+    -- Get all tool names from the Items folder
+    for _, tool in ipairs(itemsFolder:GetChildren()) do
+        if tool:IsA("Tool") then
+            table.insert(items, tool.Name)
+        end
+    end
+    
+    -- Sort alphabetically
+    table.sort(items)
+    
+    -- Update cache
+    allItemsCache = items
+    lastItemsCacheTime = tick()
+    
+    return items
+end
+
 -- Function to get list of craftable items
 local function getCraftableItems()
     local items = {}
@@ -316,20 +352,20 @@ local function findMatchingPlayer(input, excludeSelf)
     end
 end
 
--- Function to find best matching item name
-local function findMatchingItem(input)
+-- Function to find best matching item from all available items (for !bd)
+local function findMatchingAnyItem(input)
     if not input or input == "" then
         return nil, "Please provide an item name"
     end
     
-    input = input
+    input = input:lower()
     local matches = {}
     
-    -- Get all craftable items
-    local craftableItems = getCraftableItems()
+    -- Get all available items
+    local allItems = getAllItems()
     
-    for _, itemName in ipairs(craftableItems) do
-        local itemNameLower = itemName
+    for _, itemName in ipairs(allItems) do
+        local itemNameLower = itemName:lower()
         
         -- Check if input matches start of item name
         if itemNameLower:sub(1, #input) == input then
@@ -351,7 +387,42 @@ local function findMatchingItem(input)
     end
 end
 
--- Function to parse buy command (basic version)
+-- Function to find best matching craftable item (for !ac)
+local function findMatchingCraftableItem(input)
+    if not input or input == "" then
+        return nil, "Please provide an item name"
+    end
+    
+    input = input:lower()
+    local matches = {}
+    
+    -- Get all craftable items
+    local craftableItems = getCraftableItems()
+    
+    for _, itemName in ipairs(craftableItems) do
+        local itemNameLower = itemName:lower()
+        
+        -- Check if input matches start of item name
+        if itemNameLower:sub(1, #input) == input then
+            table.insert(matches, itemName)
+        end
+    end
+    
+    -- Sort matches alphabetically
+    table.sort(matches)
+    
+    if #matches == 0 then
+        return nil, "No craftable items found matching '" .. input .. "'"
+    elseif #matches == 1 then
+        return matches[1], nil
+    else
+        -- Multiple matches found
+        local matchList = table.concat(matches, ", ")
+        return nil, "Multiple craftable items found: " .. matchList .. ". Please be more specific."
+    end
+end
+
+-- Function to parse buy command (basic version for !buy)
 local function parseBuyCommand(message)
     -- Remove the command prefix and trim spaces
     local cleanMessage = message:gsub("^!%a+%s*", ""):gsub("%s+", " ")
@@ -368,7 +439,7 @@ local function parseBuyCommand(message)
     return nil, nil
 end
 
--- Function to parse buy command with autocomplete
+-- Function to parse buy command with autocomplete for ALL items (for !bd)
 local function parseBuyCommandWithAutocomplete(message)
     -- Remove the command prefix and trim spaces
     local cleanMessage = message:gsub("^!%a+%s*", ""):gsub("%s+", " ")
@@ -380,8 +451,32 @@ local function parseBuyCommandWithAutocomplete(message)
         -- Clean up the item input (remove extra spaces)
         itemInput = itemInput:gsub("^%s+", ""):gsub("%s+$", "")
         
-        -- Try to find matching item
-        local matchedItem, error = findMatchingItem(itemInput)
+        -- Try to find matching item from ALL items
+        local matchedItem, error = findMatchingAnyItem(itemInput)
+        if error then
+            return nil, nil, error
+        end
+        
+        return tonumber(amount), matchedItem, nil
+    end
+    
+    return nil, nil, "Invalid format. Use: amount-itemname"
+end
+
+-- Function to parse craft command with autocomplete (for !ac)
+local function parseCraftCommandWithAutocomplete(message)
+    -- Remove the command prefix and trim spaces
+    local cleanMessage = message:gsub("^!%a+%s*", ""):gsub("%s+", " ")
+    
+    -- Look for pattern: number-hyphen-text
+    local amount, itemInput = cleanMessage:match("^(%d+)%-(.+)$")
+    
+    if amount and itemInput then
+        -- Clean up the item input (remove extra spaces)
+        itemInput = itemInput:gsub("^%s+", ""):gsub("%s+$", "")
+        
+        -- Try to find matching craftable item
+        local matchedItem, error = findMatchingCraftableItem(itemInput)
         if error then
             return nil, nil, error
         end
@@ -1139,7 +1234,7 @@ local function showHelp()
     task.wait(2.5)
     sendChatMessage("Auto-features: Auto-whitelist for NanoReidedo, CF_P7, kupcake3245")
     task.wait(2.5)
-    sendChatMessage("Available crafts: " .. table.concat(getCraftableItems(), ", "))
+    sendChatMessage("All items available for !bd command")
 end
 
 -- Function to handle player joining for immediate whitelisting
@@ -1264,7 +1359,7 @@ local function onPlayerChatted(message, speaker)
             warn("Your input: " .. message)
         end
     
-    -- !bd command - Buy and drop loop
+    -- !bd command - Buy and drop loop (uses ALL items from ReplicatedStorage.Items)
     elseif command:sub(1,3) == "!bd" then
         local amount, itemName, error = parseBuyCommandWithAutocomplete(message)
         if error then
@@ -1283,9 +1378,9 @@ local function onPlayerChatted(message, speaker)
     elseif command == "!sbd" then
         stopBuyDrop()
     
-    -- !ac command - Autocraft items
+    -- !ac command - Autocraft items (uses CRAFTABLE items only)
     elseif command:sub(1,3) == "!ac" then
-        local amount, itemName, error = parseBuyCommandWithAutocomplete(message)
+        local amount, itemName, error = parseCraftCommandWithAutocomplete(message)
         if error then
             sendChatMessage(error)
         elseif amount and itemName then
@@ -1391,7 +1486,6 @@ Players.PlayerRemoving:Connect(function(leavingPlayer)
 end)
 
 print("Command system loaded! Bot Owner: " .. BOT_OWNER)
-print("Available crafts: " .. table.concat(getCraftableItems(), ", "))
 print("Auto-whitelist users: NanoReidedo, CF_P7, kupcake3245")
 print("Cold Plunge deletion active")
 print("Commands:")
@@ -1404,9 +1498,9 @@ print("!a - Jump once")
 print("!toa - Start auto jump")
 print("!tsa - Stop auto jump")
 print("!buy amount-item - Buy items (1s delay)")
-print("!bd amount-item - Buy & drop loop (1s delays)")
+print("!bd amount-item - Buy & drop loop (1s delays) - ALL items")
 print("!sbd - Stop buy/drop immediately")
-print("!ac amount-item - Autocraft item with equip/drop")
+print("!ac amount-item - Autocraft item (craftable only)")
 print("!sac - Stop autocraft")
 print("!o - Orbit around the user who sent the command")
 print("!so - Stop orbiting")
