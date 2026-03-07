@@ -570,7 +570,7 @@ end
 -- Function to parse buy command with autocomplete for ALL items (for !bd)
 local function parseBuyCommandWithAutocomplete(message)
     -- Remove the command prefix and trim spaces
-    local cleanMessage = message:gsub("^!%a+%s*", ""):gsub("%s+", " ")
+    local cleanMessage = message:gsub("^?%a+%s*", ""):gsub("%s+", " ")
     
     -- Look for pattern: number-hyphen-text
     local amount, itemInput = cleanMessage:match("^(%d+)%-(.+)$")
@@ -594,7 +594,7 @@ end
 -- Function to parse craft command with autocomplete (for !ac)
 local function parseCraftCommandWithAutocomplete(message)
     -- Remove the command prefix and trim spaces
-    local cleanMessage = message:gsub("^!%a+%s*", ""):gsub("%s+", " ")
+    local cleanMessage = message:gsub("^?%a+%s*", ""):gsub("%s+", " ")
     
     -- Look for pattern: number-hyphen-text
     local amount, itemInput = cleanMessage:match("^(%d+)%-(.+)$")
