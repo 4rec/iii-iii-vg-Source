@@ -19,13 +19,7 @@ whitelistedUsers[WHITELISTED_USERNAME] = true
 -- Auto-whitelist users
 local AUTO_WHITELIST_USERS = {
     "Tyler_jimmykam67Bsf",
-    "kupcake3245",
-    "dhaain201456",
-    "Quintasey",
-    "Xxskyxd3",
-    "wabcdef3",
-    "Althea9503",
-    "Lucasty5123"
+    "kupcake3245"
 }
 
 -- Crafting recipes (UPDATED WITH NEW RECIPES)
@@ -1348,17 +1342,17 @@ local function showHelp()
     -- Split help into multiple messages to avoid character limits
     sendChatMessage("~ Bot Help ~")
     task.wait(2.5)
-    sendChatMessage("Whitelist Commands (Owner Only): !wl username, !uwl username, !wlstatus")
+    sendChatMessage("Whitelist Commands (Owner Only): ?wl username, ?uwl username")
     task.wait(2.5)
-    sendChatMessage("Movement: !m player (moves bot to that player), !o player (orbits around that player), !so (stop orbit)")
+    sendChatMessage("Movement: ?m player (moves bot to that player), ?o player (orbits around that player), ?so (stop orbit)")
     task.wait(2.5)
-    sendChatMessage("Jump: !a (jump once), !toa (auto jump), !tsa (stop auto jump)")
+    sendChatMessage("Jump: ?a (jump once), ?toa (auto jump), ?tsa (stop auto jump)")
     task.wait(2.5)
-    sendChatMessage("Items: !buy amount-item, !bd amount-item (buy+drop), !sbd (stop)")
+    sendChatMessage("Items: ?buy amount-item, ?bd amount-item (buy+drop), ?sbd (stop)")
     task.wait(2.5)
-    sendChatMessage("Crafting: !ac amount-item (autocraft), !sac (stop autocraft)")
+    sendChatMessage("Crafting: ?ac amount-item (autocraft), ?sac (stop autocraft)")
     task.wait(2.5)
-    sendChatMessage("Fun: !e text (echo), !an username (annoy), !san (stop annoy)")
+    sendChatMessage("Fun: ?e text (echo), ?an username (annoy), ?san (stop annoy)")
     task.wait(2.5)
     sendChatMessage("bot made by rec ~ ty for buying :P")
 end
