@@ -182,6 +182,7 @@ local fastLoopTarget = nil
 local fastLoopStartTime = 0
 local fastLoopDuration = 10 -- 5 seconds
 local flingPower = 6000
+local respawnConnection = nil
 
 -- Variables for Cold Plunge monitor
 local coldPlungeMonitor = nil
@@ -434,14 +435,22 @@ local function findMatchingAnyItem(input)
     end
 end
 
-local function cleanupFlingEffects()
-    -- Disconnect all collision connections
-    for _, conn in ipairs(collisionConnections) do
-        if conn then
-            conn:Disconnect()
-        end
+local function resetAllConnections()
+    -- Disconnect all connections
+    if fastLoopConnection then
+        fastLoopConnection:Disconnect()
+        fastLoopConnection = nil
     end
-    collisionConnections = {}
+    
+    if steppedConnection then
+        steppedConnection:Disconnect()
+        steppedConnection = nil
+    end
+    
+    if respawnConnection then
+        respawnConnection:Disconnect()
+        respawnConnection = nil
+    end
     
     -- Remove BodyThrust
     local char = player.Character
@@ -450,12 +459,6 @@ local function cleanupFlingEffects()
         if bodyThrust then
             bodyThrust:Remove()
         end
-    end
-    
-    -- Reset collision settings (they'll be reapplied on next character)
-    if steppedConnection then
-        steppedConnection:Disconnect()
-        steppedConnection = nil
     end
 end
 
@@ -466,11 +469,8 @@ local function startFastLoop(targetPlayer)
         return 
     end
     
-    -- Ensure character exists
-    if not player.Character or not player.Character.HumanoidRootPart then
-        sendChatMessage("You don't have a character!")
-        return
-    end
+    -- Make sure everything is cleaned up before starting
+    resetAllConnections()
     
     fastLoopEnabled = true
     fastLoopTarget = targetPlayer
@@ -479,36 +479,39 @@ local function startFastLoop(targetPlayer)
     print("Fast looping " .. targetPlayer.Name)
     sendChatMessage("Starting fast loop on " .. targetPlayer.Name .. " for 5 seconds!")
     
-    -- Clean up any existing effects first
-    cleanupFlingEffects()
+    -- Ensure character exists
+    local char = player.Character
+    if not char or not char.HumanoidRootPart then
+        sendChatMessage("Error: Character not found!")
+        fastLoopEnabled = false
+        return
+    end
     
-    -- Create BodyThrust for flinging
+    -- Create BodyThrust for flinging (exactly like the script)
     local bambam = Instance.new("BodyThrust")
-    bambam.Parent = player.Character.HumanoidRootPart
+    bambam.Parent = char.HumanoidRootPart
     bambam.Force = Vector3.new(flingPower, 0, flingPower)
-    bambam.Location = player.Character.HumanoidRootPart.Position
+    bambam.Location = char.HumanoidRootPart.Position
     
-    -- Disable collisions
+    -- Disable collisions (exactly like the script)
     steppedConnection = game:GetService('RunService').Stepped:Connect(function()
         if not fastLoopEnabled then return end
         
-        local char = player.Character
-        if char and char.Humanoid then
-            if char.Humanoid.RigType == Enum.HumanoidRigType.R6 then
-                char.Head.CanCollide = false
-                char.Torso.CanCollide = false
-                char["Left Leg"].CanCollide = false
-                char["Right Leg"].CanCollide = false
+        local currentChar = player.Character
+        if currentChar and currentChar.Humanoid then
+            if currentChar.Humanoid.RigType == Enum.HumanoidRigType.R6 then
+                if currentChar.Head then currentChar.Head.CanCollide = false end
+                if currentChar.Torso then currentChar.Torso.CanCollide = false end
+                if currentChar["Left Leg"] then currentChar["Left Leg"].CanCollide = false end
+                if currentChar["Right Leg"] then currentChar["Right Leg"].CanCollide = false end
             else
-                char.Head.CanCollide = false
-                char.UpperTorso.CanCollide = false
-                char.LowerTorso.CanCollide = false
-                char.HumanoidRootPart.CanCollide = false
+                if currentChar.Head then currentChar.Head.CanCollide = false end
+                if currentChar.UpperTorso then currentChar.UpperTorso.CanCollide = false end
+                if currentChar.LowerTorso then currentChar.LowerTorso.CanCollide = false end
+                if currentChar.HumanoidRootPart then currentChar.HumanoidRootPart.CanCollide = false end
             end
         end
     end)
-    
-    table.insert(collisionConnections, steppedConnection)
     
     fastLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
         if not fastLoopEnabled then return end
@@ -530,7 +533,7 @@ local function startFastLoop(targetPlayer)
                 -- Teleport directly into target every frame
                 playerHRP.CFrame = targetHRP.CFrame
                 
-                -- Update BodyThrust position
+                -- Update BodyThrust position (exactly like the script)
                 if playerHRP:FindFirstChild("BodyThrust") then
                     playerHRP.BodyThrust.Location = playerHRP.Position
                 end
@@ -540,8 +543,6 @@ local function startFastLoop(targetPlayer)
             stopFastLoop(false)
         end
     end)
-    
-    table.insert(collisionConnections, fastLoopConnection)
 end
 
 -- Function to stop fast loop
@@ -550,46 +551,71 @@ local function stopFastLoop(timedOut)
     
     fastLoopEnabled = false
     
-    -- Clean up all effects
-    cleanupFlingEffects()
+    -- Disconnect all connections immediately
+    if fastLoopConnection then
+        fastLoopConnection:Disconnect()
+        fastLoopConnection = nil
+    end
+    
+    if steppedConnection then
+        steppedConnection:Disconnect()
+        steppedConnection = nil
+    end
+    
+    -- Remove BodyThrust
+    local char = player.Character
+    if char and char.HumanoidRootPart then
+        local bodyThrust = char.HumanoidRootPart:FindFirstChild("BodyThrust")
+        if bodyThrust then
+            bodyThrust:Remove()
+        end
+    end
     
     -- Kill the local player to completely stop all momentum
-    local char = player.Character
     if char and char.Humanoid then
         char.Humanoid.Health = 0
     end
     
     -- Only respawn and teleport back if this was a timed completion
     if timedOut then
+        -- Clear any existing respawn connection
+        if respawnConnection then
+            respawnConnection:Disconnect()
+            respawnConnection = nil
+        end
+        
         -- Wait for respawn
-        local respawnConnection = nil
         respawnConnection = player.CharacterAdded:Connect(function(newChar)
             -- Teleport back to command user after respawn
             if currentCommandUser then
                 task.wait(0.5) -- Wait for character to fully load
-                -- Check if currentCommandUser still exists and has a character
-                if currentCommandUser and currentCommandUser.Character then
-                    teleportToPlayer(currentCommandUser)
-                    sendChatMessage("Fast loop ended! Returned to " .. currentCommandUser.Name)
-                end
+                teleportToPlayer(currentCommandUser)
+                sendChatMessage("Fast loop ended! Returned to " .. currentCommandUser.Name)
             end
+            
+            -- Clean up respawn connection
             if respawnConnection then
                 respawnConnection:Disconnect()
+                respawnConnection = nil
             end
         end)
     else
-        -- Manual stop, wait for respawn then teleport back
-        local respawnConnection = nil
+        -- Manual stop, just teleport back after respawn
+        if respawnConnection then
+            respawnConnection:Disconnect()
+            respawnConnection = nil
+        end
+        
         respawnConnection = player.CharacterAdded:Connect(function(newChar)
             if currentCommandUser then
                 task.wait(0.5)
-                if currentCommandUser and currentCommandUser.Character then
-                    teleportToPlayer(currentCommandUser)
-                    sendChatMessage("Fast loop stopped! Returned to " .. currentCommandUser.Name)
-                end
+                teleportToPlayer(currentCommandUser)
+                sendChatMessage("Fast loop stopped! Returned to " .. currentCommandUser.Name)
             end
+            
             if respawnConnection then
                 respawnConnection:Disconnect()
+                respawnConnection = nil
             end
         end)
     end
@@ -1592,28 +1618,39 @@ local function onPlayerChatted(message, speaker)
     if command == "!help" then
         showHelp()
 
-    -- !fl command - Fast loop around a player for 5 seconds
-    elseif command:sub(1,3) == "!fl" then
-        local username = message:sub(4):gsub("^%s+", ""):gsub("%s+$", "")
+-- !fl command - Fast loop into a player for 5 seconds
+elseif command:sub(1,3) == "!fl" then
+    local username = message:sub(4):gsub("^%s+", ""):gsub("%s+$", "")
     
-        if username == "" then
-            sendChatMessage("Usage: !fl username")
+    if username == "" then
+        sendChatMessage("Usage: !fl username")
+    else
+        local targetPlayer, error = findMatchingPlayer(username, false)
+        if error then
+            sendChatMessage(error)
         else
-            local targetPlayer, error = findMatchingPlayer(username, false)
-            if error then
-                sendChatMessage(error)
-                else
             -- Store current command user for returning
-                currentCommandUser = speaker
-                stopFastLoop() -- Stop any existing fast loop
-                task.wait(0.1)
-                startFastLoop(targetPlayer)
+            currentCommandUser = speaker
+            
+            -- Force stop any existing fling and clean up
+            if fastLoopEnabled then
+                stopFastLoop(false)
+                task.wait(0.5) -- Wait for cleanup
             end
+            
+            -- Reset all connections to be safe
+            resetAllConnections()
+            
+            -- Start new fling
+            startFastLoop(targetPlayer)
         end
+    end
 
 -- !sfl command - Stop fast loop
-    elseif command == "!sfl" then
-        stopFastLoop()
+elseif command == "!sfl" then
+    stopFastLoop(false)
+end
+
     
     -- !b command - Bring player to the user who sent the command
     elseif command:sub(1,2) == "!m" then
