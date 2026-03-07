@@ -22,7 +22,8 @@ local AUTO_WHITELIST_USERS = {
     "kupcake3245",
     "dhaain201456",
     "Quintasey",
-    "Xxskyxd3"
+    "Xxskyxd3",
+    "wabcdef3"
 }
 
 -- Crafting recipes (UPDATED WITH NEW RECIPES)
