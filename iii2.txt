@@ -1404,7 +1404,7 @@ local function onPlayerChatted(message, speaker)
         return
     
     -- !wlstatus command - Show whitelist status (Bot Owner Only)
-    elseif command == "!wlstatus" and isBotOwner(speaker) then
+    elseif command == "?wlstatus" and isBotOwner(speaker) then
         local status = getWhitelistStatus()
         sendChatMessage(status)
         return
@@ -1414,7 +1414,7 @@ local function onPlayerChatted(message, speaker)
     if not isWhitelistedUser(speaker) then return end
     
     -- !help command - Show help
-    if command == "!help" then
+    if command == "?help" then
         showHelp()
 
     -- !b command - Bring player to the user who sent the command
@@ -1444,17 +1444,17 @@ local function onPlayerChatted(message, speaker)
         end
     
     -- !a command - Fire jump remote once
-    elseif command == "!a" then
+    elseif command == "?a" then
         fireJumpRemote()
         print("Jump remote fired once!")
         sendChatMessage("Jump executed!")
     
     -- !toa command - Start auto jumping (every 0.7 seconds)
-    elseif command == "!toa" then
+    elseif command == "?toa" then
         startAutoJump()
     
     -- !tsa command - Stop auto jumping
-    elseif command == "!tsa" then
+    elseif command == "?tsa" then
         stopAutoJump()
     
     -- !buy command - Buy items
@@ -1511,7 +1511,7 @@ local function onPlayerChatted(message, speaker)
         end
     
     -- !sbd command - Stop buy/drop
-    elseif command == "!sbd" then
+    elseif command == "?sbd" then
         stopBuyDrop()
     
     -- !ac command - Autocraft items (uses CRAFTABLE items only)
@@ -1530,7 +1530,7 @@ local function onPlayerChatted(message, speaker)
         end
     
     -- !sac command - Stop autocraft
-    elseif command == "!sac" then
+    elseif command == "?sac" then
         stopAutocraft()
     
     -- !o command - Start orbiting the user who sent the command (short for orbit)
@@ -1550,7 +1550,7 @@ local function onPlayerChatted(message, speaker)
         end
     
     -- !so command - Stop orbiting (short for stop orbit)
-    elseif command == "!so" then
+    elseif command == "?so" then
         stopOrbit()
     
     -- !e command - Echo text
@@ -1579,7 +1579,7 @@ local function onPlayerChatted(message, speaker)
         end
     
     -- !san command - Stop annoying
-    elseif command == "!san" then
+    elseif command == "?san" then
         stopAnnoy()
     end
 end
