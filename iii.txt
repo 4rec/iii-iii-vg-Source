@@ -175,15 +175,6 @@ local autocraftConnection = nil
 local autoWhitelistEnabled = false
 local autoWhitelistConnection = nil
 
--- Variables for fast loop
-local fastLoopEnabled = false
-local fastLoopConnection = nil
-local fastLoopTarget = nil
-local fastLoopStartTime = 0
-local fastLoopDuration = 10 -- 5 seconds
-local flingPower = 6000
-local respawnConnection = nil
-
 -- Variables for Cold Plunge monitor
 local coldPlungeMonitor = nil
 
@@ -435,194 +426,6 @@ local function findMatchingAnyItem(input)
     end
 end
 
-local function resetAllConnections()
-    -- Disconnect all connections
-    if fastLoopConnection then
-        fastLoopConnection:Disconnect()
-        fastLoopConnection = nil
-    end
-    
-    if steppedConnection then
-        steppedConnection:Disconnect()
-        steppedConnection = nil
-    end
-    
-    if respawnConnection then
-        respawnConnection:Disconnect()
-        respawnConnection = nil
-    end
-    
-    -- Remove BodyThrust
-    local char = player.Character
-    if char and char.HumanoidRootPart then
-        local bodyThrust = char.HumanoidRootPart:FindFirstChild("BodyThrust")
-        if bodyThrust then
-            bodyThrust:Remove()
-        end
-    end
-end
-
--- Function to start fast looping a player
-local function startFastLoop(targetPlayer)
-    if fastLoopEnabled then 
-        sendChatMessage("Fast loop already running! Use !sfl to stop.")
-        return 
-    end
-    
-    -- Make sure everything is cleaned up before starting
-    resetAllConnections()
-    
-    fastLoopEnabled = true
-    fastLoopTarget = targetPlayer
-    fastLoopStartTime = tick()
-    
-    print("Fast looping " .. targetPlayer.Name)
-    sendChatMessage("Starting fast loop on " .. targetPlayer.Name .. " for 5 seconds!")
-    
-    -- Ensure character exists
-    local char = player.Character
-    if not char or not char.HumanoidRootPart then
-        sendChatMessage("Error: Character not found!")
-        fastLoopEnabled = false
-        return
-    end
-    
-    -- Create BodyThrust for flinging (exactly like the script)
-    local bambam = Instance.new("BodyThrust")
-    bambam.Parent = char.HumanoidRootPart
-    bambam.Force = Vector3.new(flingPower, 0, flingPower)
-    bambam.Location = char.HumanoidRootPart.Position
-    
-    -- Disable collisions (exactly like the script)
-    steppedConnection = game:GetService('RunService').Stepped:Connect(function()
-        if not fastLoopEnabled then return end
-        
-        local currentChar = player.Character
-        if currentChar and currentChar.Humanoid then
-            if currentChar.Humanoid.RigType == Enum.HumanoidRigType.R6 then
-                if currentChar.Head then currentChar.Head.CanCollide = false end
-                if currentChar.Torso then currentChar.Torso.CanCollide = false end
-                if currentChar["Left Leg"] then currentChar["Left Leg"].CanCollide = false end
-                if currentChar["Right Leg"] then currentChar["Right Leg"].CanCollide = false end
-            else
-                if currentChar.Head then currentChar.Head.CanCollide = false end
-                if currentChar.UpperTorso then currentChar.UpperTorso.CanCollide = false end
-                if currentChar.LowerTorso then currentChar.LowerTorso.CanCollide = false end
-                if currentChar.HumanoidRootPart then currentChar.HumanoidRootPart.CanCollide = false end
-            end
-        end
-    end)
-    
-    fastLoopConnection = game:GetService("RunService").Heartbeat:Connect(function()
-        if not fastLoopEnabled then return end
-        
-        -- Check if 5 seconds have passed
-        if tick() - fastLoopStartTime >= fastLoopDuration then
-            stopFastLoop(true) -- Pass true to indicate timed completion
-            return
-        end
-        
-        local targetCharacter = fastLoopTarget.Character
-        local playerCharacter = player.Character
-        
-        if targetCharacter and playerCharacter then
-            local targetHRP = targetCharacter:FindFirstChild("HumanoidRootPart")
-            local playerHRP = playerCharacter:FindFirstChild("HumanoidRootPart")
-            
-            if targetHRP and playerHRP then
-                -- Teleport directly into target every frame
-                playerHRP.CFrame = targetHRP.CFrame
-                
-                -- Update BodyThrust position (exactly like the script)
-                if playerHRP:FindFirstChild("BodyThrust") then
-                    playerHRP.BodyThrust.Location = playerHRP.Position
-                end
-            end
-        else
-            sendChatMessage("Fast loop stopped - target player lost character")
-            stopFastLoop(false)
-        end
-    end)
-end
-
--- Function to stop fast loop
-local function stopFastLoop(timedOut)
-    if not fastLoopEnabled then return end
-    
-    fastLoopEnabled = false
-    
-    -- Disconnect all connections immediately
-    if fastLoopConnection then
-        fastLoopConnection:Disconnect()
-        fastLoopConnection = nil
-    end
-    
-    if steppedConnection then
-        steppedConnection:Disconnect()
-        steppedConnection = nil
-    end
-    
-    -- Remove BodyThrust
-    local char = player.Character
-    if char and char.HumanoidRootPart then
-        local bodyThrust = char.HumanoidRootPart:FindFirstChild("BodyThrust")
-        if bodyThrust then
-            bodyThrust:Remove()
-        end
-    end
-    
-    -- Kill the local player to completely stop all momentum
-    if char and char.Humanoid then
-        char.Humanoid.Health = 0
-    end
-    
-    -- Only respawn and teleport back if this was a timed completion
-    if timedOut then
-        -- Clear any existing respawn connection
-        if respawnConnection then
-            respawnConnection:Disconnect()
-            respawnConnection = nil
-        end
-        
-        -- Wait for respawn
-        respawnConnection = player.CharacterAdded:Connect(function(newChar)
-            -- Teleport back to command user after respawn
-            if currentCommandUser then
-                task.wait(0.5) -- Wait for character to fully load
-                teleportToPlayer(currentCommandUser)
-                sendChatMessage("Fast loop ended! Returned to " .. currentCommandUser.Name)
-            end
-            
-            -- Clean up respawn connection
-            if respawnConnection then
-                respawnConnection:Disconnect()
-                respawnConnection = nil
-            end
-        end)
-    else
-        -- Manual stop, just teleport back after respawn
-        if respawnConnection then
-            respawnConnection:Disconnect()
-            respawnConnection = nil
-        end
-        
-        respawnConnection = player.CharacterAdded:Connect(function(newChar)
-            if currentCommandUser then
-                task.wait(0.5)
-                teleportToPlayer(currentCommandUser)
-                sendChatMessage("Fast loop stopped! Returned to " .. currentCommandUser.Name)
-            end
-            
-            if respawnConnection then
-                respawnConnection:Disconnect()
-                respawnConnection = nil
-            end
-        end)
-    end
-    
-    fastLoopTarget = nil
-    print("Fast loop stopped!")
-end
 
 -- Function to find best matching craftable item (for !ac)
 local function findMatchingCraftableItem(input)
@@ -1618,40 +1421,6 @@ local function onPlayerChatted(message, speaker)
     if command == "!help" then
         showHelp()
 
--- !fl command - Fast loop into a player for 5 seconds
-elseif command:sub(1,3) == "!fl" then
-    local username = message:sub(4):gsub("^%s+", ""):gsub("%s+$", "")
-    
-    if username == "" then
-        sendChatMessage("Usage: !fl username")
-    else
-        local targetPlayer, error = findMatchingPlayer(username, false)
-        if error then
-            sendChatMessage(error)
-        else
-            -- Store current command user for returning
-            currentCommandUser = speaker
-            
-            -- Force stop any existing fling and clean up
-            if fastLoopEnabled then
-                stopFastLoop(false)
-                task.wait(0.5) -- Wait for cleanup
-            end
-            
-            -- Reset all connections to be safe
-            resetAllConnections()
-            
-            -- Start new fling
-            startFastLoop(targetPlayer)
-        end
-    end
-
--- !sfl command - Stop fast loop
-elseif command == "!sfl" then
-    stopFastLoop(false)
-end
-
-    
     -- !b command - Bring player to the user who sent the command
     elseif command:sub(1,2) == "!m" then
         local username = message:sub(3):gsub("^%s+", ""):gsub("%s+$", "")
@@ -1860,7 +1629,6 @@ Players.PlayerRemoving:Connect(function(leavingPlayer)
         stopAutocraft()
         stopAutoWhitelist()
         cleanupDropPlatform()
-        stopFastLoop()
         
         -- Clean up Cold Plunge monitor
         if coldPlungeMonitor then
@@ -1891,5 +1659,3 @@ print("!so - Stop orbiting")
 print("!e text - Echo text in chat")
 print("!an username - Annoy player by constantly teleporting to them")
 print("!san - Stop annoying")
-print("!fl username - Fast spin/teleport around player for 5 seconds")
-print("!sfl - Stop fast loop")
