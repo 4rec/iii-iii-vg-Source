@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>png tool</title>
+<style>
+body{background:black;margin:0;min-height:100vh;display:flex;justify-content:center;align-items:center;font-family:monospace}
+.box{background:#000;border:1px solid #333;padding:2rem;width:320px}
+input,button{background:#111;color:#0f0;border:1px solid #0f0;font-family:monospace;font-size:1rem;padding:8px;margin:10px 0;width:100%}
+button{cursor:pointer}
+button:hover{background:#0f0;color:#000}
+.status{margin-top:20px;padding:12px;border:1px solid #333;text-align:center;font-size:0.9rem;color:#0f0}
+.error{color:#f00;margin-top:10px;padding:8px;border:1px solid #300}
+</style>
+</head>
+<body>
+<div class="box">
+<input type="file" id="file" accept="image/*">
+<button id="btn">format for phosimp</button>
+<div id="status" class="status" style="display:none"></div>
+<div id="err" class="error" style="display:none"></div>
+</div>
+<script>
+const fileInput=document.getElementById('file');
+const btn=document.getElementById('btn');
+const statusDiv=document.getElementById('status');
+const errDiv=document.getElementById('err');
+btn.onclick=()=>{
+statusDiv.style.display='none';
+errDiv.style.display='none';
+const f=fileInput.files[0];
+if(!f){errDiv.innerText='no file';errDiv.style.display='block';return;}
+const img=new Image();
+const url=URL.createObjectURL(f);
+img.onload=()=>{
+URL.revokeObjectURL(url);
+const canvas=document.createElement('canvas');
+canvas.width=512;
+canvas.height=512;
+const ctx=canvas.getContext('2d');
+ctx.drawImage(img,0,0,512,512);
+canvas.toBlob((blob)=>{
+let name=f.name.replace(/\.(png|jpg|jpeg|gif|bmp|webp)$/i,'');
+const finalName=name+'_fixed.png';
+const link=document.createElement('a');
+const downloadUrl=URL.createObjectURL(blob);
+link.href=downloadUrl;
+link.download=finalName;
+document.body.appendChild(link);
+link.click();
+document.body.removeChild(link);
+URL.revokeObjectURL(downloadUrl);
+statusDiv.innerText='done - saved as '+finalName;
+statusDiv.style.display='block';
+},'image/png');
+};
+img.onerror=()=>{
+URL.revokeObjectURL(url);
+errDiv.innerText='invalid image';
+errDiv.style.display='block';
+};
+img.src=url;
+};
+</script>
+</body>
+</html>
