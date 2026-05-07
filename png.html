@@ -1,0 +1,48 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>png check</title>
+<style>
+body{background:black;margin:0;min-height:100vh;display:flex;justify-content:center;align-items:center;font-family:monospace}
+.box{background:#000;border:1px solid #333;padding:2rem;width:320px}
+input,button{background:#111;color:#0f0;border:1px solid #0f0;font-family:monospace;font-size:1rem;padding:8px;margin:10px 0;width:100%}
+button{cursor:pointer}
+button:hover{background:#0f0;color:#000}
+.result{margin-top:20px;padding:12px;border:1px solid #333;text-align:center;font-size:1.5rem;color:#0f0}
+.error{color:#f00;margin-top:10px;padding:8px;border:1px solid #300}
+</style>
+</head>
+<body>
+<div class="box">
+<input type="file" id="file">
+<button id="btn">check</button>
+<div id="res" class="result" style="display:none"></div>
+<div id="err" class="error" style="display:none"></div>
+</div>
+<script>
+const fileInput=document.getElementById('file');
+const btn=document.getElementById('btn');
+const resDiv=document.getElementById('res');
+const errDiv=document.getElementById('err');
+btn.onclick=()=>{
+resDiv.style.display='none';
+errDiv.style.display='none';
+const f=fileInput.files[0];
+if(!f){errDiv.innerText='no file';errDiv.style.display='block';return;}
+const reader=new FileReader();
+reader.onload=(e)=>{
+let txt=e.target.result;
+let firstLine=txt.indexOf('\n')===-1?txt:txt.slice(0,txt.indexOf('\n'));
+if(firstLine.endsWith('\r'))firstLine=firstLine.slice(0,-1);
+const ok=firstLine.includes('PNG');
+resDiv.innerText=ok?'yes':'no';
+resDiv.style.display='block';
+};
+reader.onerror=()=>{errDiv.innerText='read fail';errDiv.style.display='block';};
+reader.readAsText(f.slice(0,512),'UTF-8');
+};
+</script>
+</body>
+</html>
