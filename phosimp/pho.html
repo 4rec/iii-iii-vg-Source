@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>phocropper</title>
+<style>
+body{background:black;margin:0;min-height:100vh;display:flex;justify-content:center;align-items:center;font-family:monospace;padding:20px}
+.box{background:#000;border:1px solid #333;padding:2rem;width:700px;max-width:100%}
+input,button{background:#111;color:#0f0;border:1px solid #0f0;font-family:monospace;font-size:1rem;padding:8px;margin:10px 0;width:100%}
+button{cursor:pointer}
+button:hover{background:#0f0;color:#000}
+.preview-area{text-align:center;margin:15px 0;position:relative;touch-action:none}
+canvas#imageCanvas{max-width:100%;border:1px solid #333;background:#111;cursor:grab}
+canvas#imageCanvas:active{cursor:grabbing}
+.crop-controls{display:flex;gap:10px;justify-content:center;margin:15px 0;flex-wrap:wrap}
+.crop-btn{background:#111;color:#0f0;border:1px solid #0f0;padding:6px 15px;font-size:1.2rem;width:auto;min-width:60px}
+.crop-btn:hover{background:#0f0;color:#000}
+.size-info{text-align:center;color:#0f0;margin:10px 0;font-size:0.8rem}
+.drag-note{text-align:center;color:#0f0;font-size:0.7rem;margin:5px 0;opacity:0.7}
+.status{margin-top:15px;padding:10px;border:1px solid #333;text-align:center;font-size:0.9rem;color:#0f0;display:none}
+.error{color:#f00;margin-top:10px;padding:8px;border:1px solid #300;display:none}
+</style>
+</head>
+<body>
+<div class="box">
+<input type="file" id="file" accept="image/*">
+<div class="preview-area">
+<canvas id="imageCanvas" width="500" height="500" style="width:100%;height:auto;max-width:500px"></canvas>
+</div>
+<div class="drag-note">made by rec</div>
+<div class="size-info">crop size: <span id="cropSizeVal">64</span> x <span id="cropSizeVal2">64</span></div>
+<div class="crop-controls">
+<button class="crop-btn" id="sizeDecSmaller">&lt;&lt;</button>
+<button class="crop-btn" id="sizeDec">&lt;</button>
+<button class="crop-btn" id="sizeInc">&gt;</button>
+<button class="crop-btn" id="sizeIncLarger">&gt;&gt;</button>
+</div>
+<button id="cropBtn">crop</button>
+<div id="status" class="status"></div>
+<div id="err" class="error"></div>
+</div>
+
+<script>
+const fileInput=document.getElementById('file');
+const canvas=document.getElementById('imageCanvas');
+const ctx=canvas.getContext('2d');
+const cropSizeVal=document.getElementById('cropSizeVal');
+const cropSizeVal2=document.getElementById('cropSizeVal2');
+const sizeDecSmaller=document.getElementById('sizeDecSmaller');
+const sizeDec=document.getElementById('sizeDec');
+const sizeInc=document.getElementById('sizeInc');
+const sizeIncLarger=document.getElementById('sizeIncLarger');
+const cropBtn=document.getElementById('cropBtn');
+const statusDiv=document.getElementById('status');
+const errDiv=document.getElementById('err');
+
+let originalImg=null;
+let imgWidth=0,imgHeight=0;
+let cropSize=64;
+let cropX=0,cropY=0;
+let displayScale=1;
+let canvasDisplaySize=500;
+let dragActive=false;
+let dragStartX=0,dragStartY=0;
+let startCropX=0,startCropY=0;
+
+function updateCropDisplay(){
+if(!originalImg) return;
+cropSizeVal.innerText=cropSize;
+cropSizeVal2.innerText=cropSize;
+ctx.clearRect(0,0,canvas.width,canvas.height);
+const drawWidth=canvasDisplaySize;
+const drawHeight=canvasDisplaySize;
+ctx.drawImage(originalImg,0,0,imgWidth,imgHeight,0,0,drawWidth,drawHeight);
+const cropDispW=(cropSize/imgWidth)*drawWidth;
+const cropDispH=(cropSize/imgHeight)*drawHeight;
+const pixelX=(cropX/imgWidth)*drawWidth;
+const pixelY=(cropY/imgHeight)*drawHeight;
+ctx.strokeStyle='#0f0';
+ctx.lineWidth=3;
+ctx.strokeRect(pixelX,pixelY,cropDispW,cropDispH);
+ctx.fillStyle='rgba(0,255,0,0.15)';
+ctx.fillRect(pixelX,pixelY,cropDispW,cropDispH);
+}
+
+function clampCropPosition(){
+let maxX=imgWidth-cropSize;
+let maxY=imgHeight-cropSize;
+if(maxX<0) maxX=0;
+if(maxY<0) maxY=0;
+if(cropX<0) cropX=0;
+if(cropY<0) cropY=0;
+if(cropX>maxX) cropX=maxX;
+if(cropY>maxY) cropY=maxY;
+if(cropSize>imgWidth) cropSize=imgWidth;
+if(cropSize>imgHeight) cropSize=imgHeight;
+}
+
+function loadImage(file){
+const reader=new FileReader();
+reader.onload=(e)=>{
+const img=new Image();
+img.onload=()=>{
+originalImg=img;
+imgWidth=img.width;
+imgHeight=img.height;
+let maxDim=Math.min(imgWidth,imgHeight);
+cropSize=64;
+while(cropSize*2<=maxDim) cropSize*=2;
+if(cropSize>maxDim) cropSize=maxDim;
+if(cropSize<2) cropSize=2;
+cropX=(imgWidth-cropSize)/2;
+cropY=(imgHeight-cropSize)/2;
+clampCropPosition();
+updateCropDisplay();
+errDiv.style.display='none';
+statusDiv.style.display='none';
+};
+img.src=e.target.result;
+};
+reader.readAsDataURL(file);
+}
+
+fileInput.onchange=(e)=>{
+const f=e.target.files[0];
+if(!f) return;
+loadImage(f);
+};
+
+function setCropSize(newSize){
+if(!originalImg) return;
+let maxPossible=Math.min(imgWidth,imgHeight);
+let finalSize=newSize;
+if(finalSize<4) finalSize=4;
+if(finalSize>maxPossible) finalSize=maxPossible;
+cropSize=finalSize;
+clampCropPosition();
+updateCropDisplay();
+}
+
+sizeDecSmaller.onclick=()=>{
+if(!originalImg) return;
+let newSize=Math.floor(cropSize/1.5);
+if(newSize<4) newSize=4;
+setCropSize(newSize);
+};
+sizeDec.onclick=()=>{
+if(!originalImg) return;
+let newSize=Math.floor(cropSize/1.1);
+if(newSize<4) newSize=4;
+setCropSize(newSize);
+};
+sizeInc.onclick=()=>{
+if(!originalImg) return;
+let newSize=Math.floor(cropSize*1.1);
+setCropSize(newSize);
+};
+sizeIncLarger.onclick=()=>{
+if(!originalImg) return;
+let newSize=Math.floor(cropSize*1.5);
+setCropSize(newSize);
+};
+
+function getMousePos(e){
+const rect=canvas.getBoundingClientRect();
+const scaleX=canvas.width/rect.width;
+const scaleY=canvas.height/rect.height;
+let clientX,clientY;
+if(e.touches){
+clientX=e.touches[0].clientX;
+clientY=e.touches[0].clientY;
+}else{
+clientX=e.clientX;
+clientY=e.clientY;
+}
+let canvasX=(clientX-rect.left)*scaleX;
+let canvasY=(clientY-rect.top)*scaleY;
+canvasX=Math.max(0,Math.min(canvas.width,canvasX));
+canvasY=Math.max(0,Math.min(canvas.height,canvasY));
+const imgX=(canvasX/canvas.width)*imgWidth;
+const imgY=(canvasY/canvas.height)*imgHeight;
+return {imgX,imgY};
+}
+
+function isInsideSquare(imgX,imgY){
+const drawWidth=canvasDisplaySize;
+const drawHeight=canvasDisplaySize;
+const cropDispW=(cropSize/imgWidth)*drawWidth;
+const cropDispH=(cropSize/imgHeight)*drawHeight;
+const pixelX=(cropX/imgWidth)*drawWidth;
+const pixelY=(cropY/imgHeight)*drawHeight;
+const canvasX=(imgX/imgWidth)*drawWidth;
+const canvasY=(imgY/imgHeight)*drawHeight;
+return canvasX>=pixelX && canvasX<=pixelX+cropDispW && canvasY>=pixelY && canvasY<=pixelY+cropDispH;
+}
+
+function onDragStart(e){
+if(!originalImg) return;
+e.preventDefault();
+dragActive=true;
+const {imgX,imgY}=getMousePos(e);
+if(isInsideSquare(imgX,imgY)){
+dragStartX=imgX;
+dragStartY=imgY;
+startCropX=cropX;
+startCropY=cropY;
+canvas.style.cursor='grabbing';
+}
+}
+
+function onDragMove(e){
+if(!dragActive || !originalImg) return;
+e.preventDefault();
+const {imgX,imgY}=getMousePos(e);
+let deltaX=imgX-dragStartX;
+let deltaY=imgY-dragStartY;
+let newX=startCropX+deltaX;
+let newY=startCropY+deltaY;
+let maxX=imgWidth-cropSize;
+let maxY=imgHeight-cropSize;
+if(maxX<0) maxX=0;
+if(maxY<0) maxY=0;
+newX=Math.max(0,Math.min(maxX,newX));
+newY=Math.max(0,Math.min(maxY,newY));
+cropX=newX;
+cropY=newY;
+updateCropDisplay();
+}
+
+function onDragEnd(e){
+dragActive=false;
+canvas.style.cursor='grab';
+}
+
+canvas.addEventListener('mousedown',onDragStart);
+window.addEventListener('mousemove',onDragMove);
+window.addEventListener('mouseup',onDragEnd);
+canvas.addEventListener('touchstart',onDragStart,{passive:false});
+window.addEventListener('touchmove',onDragMove,{passive:false});
+window.addEventListener('touchend',onDragEnd);
+canvas.style.cursor='grab';
+
+cropBtn.onclick=()=>{
+if(!originalImg){
+errDiv.innerText='no image loaded';
+errDiv.style.display='block';
+return;
+}
+const sx=cropX;
+const sy=cropY;
+const tempCanvas=document.createElement('canvas');
+tempCanvas.width=cropSize;
+tempCanvas.height=cropSize;
+const tempCtx=tempCanvas.getContext('2d');
+tempCtx.drawImage(originalImg,sx,sy,cropSize,cropSize,0,0,cropSize,cropSize);
+const finalCanvas=document.createElement('canvas');
+finalCanvas.width=512;
+finalCanvas.height=512;
+const finalCtx=finalCanvas.getContext('2d');
+finalCtx.drawImage(tempCanvas,0,0,512,512);
+finalCanvas.toBlob((blob)=>{
+let name='cropped_image.png';
+if(fileInput.files[0]){
+let base=fileInput.files[0].name.replace(/\.(png|jpg|jpeg|gif|bmp|webp)$/i,'');
+name=base+'_cropped.png';
+}
+const link=document.createElement('a');
+const url=URL.createObjectURL(blob);
+link.href=url;
+link.download=name;
+document.body.appendChild(link);
+link.click();
+document.body.removeChild(link);
+URL.revokeObjectURL(url);
+statusDiv.innerText='saved: '+name+' (512x512)';
+statusDiv.style.display='block';
+errDiv.style.display='none';
+},'image/png');
+};
+</script>
+</body>
+</html>
