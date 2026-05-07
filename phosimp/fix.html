@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -5,10 +6,13 @@
 <title>png tool</title>
 <style>
 body{background:black;margin:0;min-height:100vh;display:flex;justify-content:center;align-items:center;font-family:monospace}
-.box{background:#000;border:1px solid #333;padding:2rem;width:320px}
+.box{background:#000;border:1px solid #333;padding:2rem;width:340px}
 input,button{background:#111;color:#0f0;border:1px solid #0f0;font-family:monospace;font-size:1rem;padding:8px;margin:10px 0;width:100%}
 button{cursor:pointer}
 button:hover{background:#0f0;color:#000}
+.mode-group{display:flex;gap:10px;margin:10px 0}
+.mode-btn{background:#111;color:#0f0;border:1px solid #0f0;padding:8px;flex:1;text-align:center;cursor:pointer}
+.mode-btn.active{background:#0f0;color:#000}
 .status{margin-top:20px;padding:12px;border:1px solid #333;text-align:center;font-size:0.9rem;color:#0f0}
 .error{color:#f00;margin-top:10px;padding:8px;border:1px solid #300}
 </style>
@@ -16,6 +20,10 @@ button:hover{background:#0f0;color:#000}
 <body>
 <div class="box">
 <input type="file" id="file" accept="image/*">
+<div class="mode-group">
+<div id="modeSquish" class="mode-btn active">squish</div>
+<div id="modeCrop" class="mode-btn">crop</div>
+</div>
 <button id="btn">format for phosimp</button>
 <div id="status" class="status" style="display:none"></div>
 <div id="err" class="error" style="display:none"></div>
@@ -25,6 +33,27 @@ const fileInput=document.getElementById('file');
 const btn=document.getElementById('btn');
 const statusDiv=document.getElementById('status');
 const errDiv=document.getElementById('err');
+const modeSquish=document.getElementById('modeSquish');
+const modeCrop=document.getElementById('modeCrop');
+let currentMode='squish';
+
+modeSquish.onclick=()=>{
+currentMode='squish';
+modeSquish.classList.add('active');
+modeCrop.classList.remove('active');
+};
+modeCrop.onclick=()=>{
+currentMode='crop';
+modeCrop.classList.add('active');
+modeSquish.classList.remove('active');
+};
+
+function largestPowerOf2(n){
+let p=1;
+while(p*2<=n) p*=2;
+return p;
+}
+
 btn.onclick=()=>{
 statusDiv.style.display='none';
 errDiv.style.display='none';
@@ -35,10 +64,28 @@ const url=URL.createObjectURL(f);
 img.onload=()=>{
 URL.revokeObjectURL(url);
 const canvas=document.createElement('canvas');
+const ctx=canvas.getContext('2d');
+
+if(currentMode==='squish'){
 canvas.width=512;
 canvas.height=512;
-const ctx=canvas.getContext('2d');
 ctx.drawImage(img,0,0,512,512);
+}else{
+const w=img.width;
+const h=img.height;
+const cropSize=Math.min(largestPowerOf2(w),largestPowerOf2(h));
+const sx=(w-cropSize)/2;
+const sy=(h-cropSize)/2;
+canvas.width=512;
+canvas.height=512;
+const tempCanvas=document.createElement('canvas');
+tempCanvas.width=cropSize;
+tempCanvas.height=cropSize;
+const tempCtx=tempCanvas.getContext('2d');
+tempCtx.drawImage(img,sx,sy,cropSize,cropSize,0,0,cropSize,cropSize);
+ctx.drawImage(tempCanvas,0,0,512,512);
+}
+
 canvas.toBlob((blob)=>{
 let name=f.name.replace(/\.(png|jpg|jpeg|gif|bmp|webp)$/i,'');
 const finalName=name+'_fixed.png';
@@ -50,7 +97,7 @@ document.body.appendChild(link);
 link.click();
 document.body.removeChild(link);
 URL.revokeObjectURL(downloadUrl);
-statusDiv.innerText='done - saved as '+finalName;
+statusDiv.innerText='done - '+currentMode+' mode: '+finalName;
 statusDiv.style.display='block';
 },'image/png');
 };
