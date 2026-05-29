@@ -1,4 +1,4 @@
--- c
+-- d
 
 local f = workspace.guessTheFlag.FlagPart.flagDecal
 local fol = workspace.gtfFlags
@@ -13,15 +13,9 @@ if not table.find(ALLOWED_USERS, currentUser) then
 end
 
 local otherUser = (currentUser == "coolcat8520") and "kamlol18" or "coolcat8520"
-local isActive = false
-local otherLastTyped = tick()
-local otherListenerActive = false
-
--- Debouncing variables
-local lastSentTexture = nil
-local lastSendTime = 0
-local pendingSend = nil
-local sendDebounceTime = 0.5 -- Don't send same texture within 0.5 seconds
+local canGuess = false
+local otherJustMessaged = false
+local loopActive = false
 
 function find(t)
     for _,v in pairs(fol:GetChildren()) do
@@ -66,90 +60,7 @@ function send(txt)
     retry()
 end
 
-function sendWithDelay(txt)
-    -- Cancel pending send if it's the same texture
-    if pendingSend then
-        pendingSend:Disconnect()
-        pendingSend = nil
-    end
-    
-    -- Schedule the send after 1.5 seconds
-    local connection
-    connection = game:GetService("RunService").Stepped:Connect(function()
-        connection:Disconnect()
-        pendingSend = nil
-        send(txt)
-    end)
-    pendingSend = connection
-end
-
-function startGuessing()
-    if isActive then return end
-    isActive = true
-    
-    -- Reset debounce when starting
-    lastSentTexture = nil
-    lastSendTime = 0
-    
-    -- Get initial flag
-    local initialName = find(f.Texture)
-    if initialName then
-        sendWithDelay(string.lower(initialName))
-        lastSentTexture = f.Texture
-        lastSendTime = tick()
-    end
-    
-    -- Main guessing loop
-    f:GetPropertyChangedSignal("Texture"):Connect(function()
-        if isActive then
-            local tex = f.Texture
-            local currentTime = tick()
-            
-            -- Check if this texture was recently sent
-            if lastSentTexture == tex and (currentTime - lastSendTime) < sendDebounceTime then
-                return -- Skip duplicate
-            end
-            
-            local name = find(tex)
-            if name then
-                lastSentTexture = tex
-                lastSendTime = currentTime
-                sendWithDelay(string.lower(name))
-            end
-        end
-    end)
-end
-
-function stopGuessing()
-    isActive = false
-    -- Clear pending send
-    if pendingSend then
-        pendingSend:Disconnect()
-        pendingSend = nil
-    end
-end
-
--- Check for cooldown on the other person
-function monitorOtherUser()
-    while true do
-        wait(1) -- Check every second
-        local timeSinceOtherTyped = tick() - otherLastTyped
-        
-        -- If other user hasn't typed in 5 seconds and we're not currently active
-        if timeSinceOtherTyped >= 5 and not isActive and not otherListenerActive then
-            otherListenerActive = true
-            print("Other user cooldown detected, activating guesser...")
-            startGuessing()
-            
-            -- Give the other user time to come back, then deactivate
-            wait(8) -- Let guesser run for 8 seconds
-            stopGuessing()
-            otherListenerActive = false
-        end
-    end
-end
-
--- Listen for other user's chat messages
+-- Listen for chat messages
 local function setupChatListener()
     local rs = game:GetService("ReplicatedStorage")
     local c = rs:FindFirstChild("DefaultChatSystemChatEvents")
@@ -158,14 +69,34 @@ local function setupChatListener()
         local me = c:FindFirstChild("OnMessageDoneFiltering")
         if me then
             me.OnClientEvent:Connect(function(data)
-                if data.FromSpeaker == otherUser then
-                    otherLastTyped = tick()
-                    -- If we're currently guessing, stop and let other user take over
-                    if isActive then
-                        stopGuessing()
-                        otherListenerActive = false
-                        print("Other user started typing, stopping guesser...")
+                local speaker = data.FromSpeaker
+                local message = data.Message
+                
+                -- Check for !start command from coolcat8520
+                if speaker == "coolcat8520" and message == "!start" and not loopActive then
+                    loopActive = true
+                    print("Starting loop...")
+                    
+                    -- kamlol18 sends first message
+                    if currentUser == "kamlol18" then
+                        wait(0.5)
+                        local tex = f.Texture
+                        local name = find(tex)
+                        if name then
+                            send(string.lower(name))
+                        end
+                        wait(0.1)
+                        -- Start the guessing loop for both users
+                        coroutine.wrap(startGuessing)()
+                    elseif currentUser == "coolcat8520" then
+                        -- coolcat8520 just starts listening
+                        coroutine.wrap(startGuessing)()
                     end
+                end
+                
+                -- Track when other user sends any message (for the loop)
+                if speaker == otherUser and loopActive then
+                    otherJustMessaged = true
                 end
             end)
         end
@@ -174,33 +105,64 @@ local function setupChatListener()
         local ch = t.TextChannels:FindFirstChild("RBXGeneral")
         if ch then
             ch.MessageReceived:Connect(function(message)
-                if message.TextSource and message.TextSource.Name == otherUser then
-                    otherLastTyped = tick()
-                    if isActive then
-                        stopGuessing()
-                        otherListenerActive = false
-                        print("Other user started typing, stopping guesser...")
+                if message.TextSource and message.TextSource.Name == "coolcat8520" and message.Text == "!start" and not loopActive then
+                    loopActive = true
+                    print("Starting loop...")
+                    
+                    if currentUser == "kamlol18" then
+                        wait(0.5)
+                        local tex = f.Texture
+                        local name = find(tex)
+                        if name then
+                            send(string.lower(name))
+                        end
+                        wait(0.1)
+                        coroutine.wrap(startGuessing)()
+                    elseif currentUser == "coolcat8520" then
+                        coroutine.wrap(startGuessing)()
                     end
+                end
+                
+                if message.TextSource and message.TextSource.Name == otherUser and loopActive then
+                    otherJustMessaged = true
                 end
             end)
         end
     end
 end
 
--- Initial typing for kamlol18
-if currentUser == "kamlol18" then
-    wait(2) -- Wait a moment for game to load
-    send("a")
-    wait(1) -- Let the message send
+-- Main guessing loop
+function startGuessing()
+    while loopActive do
+        -- Wait for the other person to message
+        otherJustMessaged = false
+        repeat
+            wait(0.1)
+        until otherJustMessaged == true or not loopActive
+        
+        if not loopActive then break end
+        
+        -- Wait 0.75 seconds after their message
+        wait(0.75)
+        
+        -- Send the current flag
+        local tex = f.Texture
+        local name = find(tex)
+        if name then
+            send(string.lower(name))
+        end
+        
+        -- Brief pause before listening again
+        wait(0.1)
+    end
 end
 
--- Start monitoring the other user
-coroutine.wrap(monitorOtherUser)()
+-- Setup and wait for !start command
 setupChatListener()
 
--- If you're coolcat8520, start guessing immediately (kamlol18 will start the cycle)
-if currentUser == "coolcat8520" then
+print("Script loaded. Waiting for coolcat8520 to type '!start' in chat...")
+
+-- Keep script running
+while not loopActive do
     wait(1)
-    otherLastTyped = tick() + 6 -- Pretend kamlol hasn't typed for 6 seconds
-    wait(5) -- Wait for kamlol's initial message to pass
 end
