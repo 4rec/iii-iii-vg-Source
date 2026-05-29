@@ -1,3 +1,5 @@
+
+-- a
 local f = workspace.guessTheFlag.FlagPart.flagDecal
 local fol = workspace.gtfFlags
 
@@ -22,7 +24,6 @@ end
 -- State management
 local isMyTurn = (currentPlayer == "coolcat8520") -- coolcat8520 starts
 local waitingForMessage = false
-local messageConnection = nil
 
 function find(t)
     for _, v in pairs(fol:GetChildren()) do
@@ -35,11 +36,6 @@ end
 
 -- Send private message to other player
 function sendPrivateMessage(txt)
-    local args = {
-        [1] = txt,  -- message
-        [2] = otherPlayer  -- recipient
-    }
-    
     local rs = game:GetService("ReplicatedStorage")
     local c = rs:FindFirstChild("DefaultChatSystemChatEvents")
     
@@ -130,74 +126,32 @@ function processFlag()
     end
 end
 
--- Listen for private messages
-function setupMessageListener()
-    -- Method 1: Using DefaultChatSystemChatEvents
-    local rs = game:GetService("ReplicatedStorage")
-    local chatEvent = rs:FindFirstChild("DefaultChatSystemChatEvents")
-    
-    if chatEvent then
-        local onMessageEvent = chatEvent:FindFirstChild("OnMessageDoneFiltering")
-        if onMessageEvent then
-            messageConnection = onMessageEvent.OnClientEvent:Connect(function(data)
-                if data and data.FromSpeaker and data.Message then
-                    local sender = data.FromSpeaker
-                    local msg = data.Message
-                    
-                    -- Check if message is from other player
-                    if sender == otherPlayer then
-                        if msg == "YOUR_TURN" then
-                            -- Other player indicates it's our turn
-                            isMyTurn = true
-                            waitingForMessage = false
-                            -- Immediately check current flag
-                            processFlag()
-                        elseif isMyTurn == false and waitingForMessage == false then
-                            -- We received a country name, wait 1 second then say it
-                            waitingForMessage = true
-                            task.wait(1)
-                            
-                            -- Find current flag name
-                            local tex = f.Texture
-                            local countryName = find(tex)
-                            
-                            if countryName then
-                                sendPublicMessage(string.lower(countryName))
-                                waitingForMessage = false
-                                isMyTurn = false
-                                -- Tell other player it's their turn
-                                sendPrivateMessage("YOUR_TURN")
-                            else
-                                waitingForMessage = false
-                                isMyTurn = true
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-    end
-    
-    -- Alternative method using TextChatService
-    local ts = game:GetService("TextChatService")
-    local chatChannel = ts.TextChannels:FindFirstChild("RBXGeneral")
-    
-    if chatChannel then
-        local existingConn = messageConnection
-        if chatChannel.MessageReceived then
-            local conn = chatChannel.MessageReceived:Connect(function(message)
-                local sender = message.FromSpeaker
-                local msg = message.Text
+-- Listen for private messages using OnMessageDoneFiltering (most reliable)
+local rs = game:GetService("ReplicatedStorage")
+local chatEvent = rs:FindFirstChild("DefaultChatSystemChatEvents")
+
+if chatEvent then
+    local onMessageEvent = chatEvent:FindFirstChild("OnMessageDoneFiltering")
+    if onMessageEvent then
+        onMessageEvent.OnClientEvent:Connect(function(data)
+            if data and data.FromSpeaker and data.Message then
+                local sender = data.FromSpeaker
+                local msg = data.Message
                 
-                if sender and sender.Name == otherPlayer then
+                -- Check if message is from other player
+                if sender == otherPlayer then
                     if msg == "YOUR_TURN" then
+                        -- Other player indicates it's our turn
                         isMyTurn = true
                         waitingForMessage = false
+                        -- Immediately check current flag
                         processFlag()
                     elseif isMyTurn == false and waitingForMessage == false then
+                        -- We received a country name, wait 1 second then say it
                         waitingForMessage = true
                         task.wait(1)
                         
+                        -- Find current flag name
                         local tex = f.Texture
                         local countryName = find(tex)
                         
@@ -205,6 +159,7 @@ function setupMessageListener()
                             sendPublicMessage(string.lower(countryName))
                             waitingForMessage = false
                             isMyTurn = false
+                            -- Tell other player it's their turn
                             sendPrivateMessage("YOUR_TURN")
                         else
                             waitingForMessage = false
@@ -212,15 +167,42 @@ function setupMessageListener()
                         end
                     end
                 end
-            end)
-            
-            if existingConn then
-                existingConn:Disconnect()
             end
-            messageConnection = conn
-        end
+        end)
     end
 end
+
+-- Alternative: Listen for chat using Players.PlayerAdded for whispers
+game:GetService("Players").PlayerAdded:Connect(function(player)
+    if player.Name == otherPlayer then
+        player.Chatted:Connect(function(msg)
+            local sender = player.Name
+            if sender == otherPlayer then
+                if msg == "YOUR_TURN" then
+                    isMyTurn = true
+                    waitingForMessage = false
+                    processFlag()
+                elseif isMyTurn == false and waitingForMessage == false and msg ~= "YOUR_TURN" then
+                    waitingForMessage = true
+                    task.wait(1)
+                    
+                    local tex = f.Texture
+                    local countryName = find(tex)
+                    
+                    if countryName then
+                        sendPublicMessage(string.lower(countryName))
+                        waitingForMessage = false
+                        isMyTurn = false
+                        sendPrivateMessage("YOUR_TURN")
+                    else
+                        waitingForMessage = false
+                        isMyTurn = true
+                    end
+                end
+            end
+        end)
+    end
+end)
 
 -- Watch for flag changes
 f:GetPropertyChangedSignal("Texture"):Connect(function()
@@ -228,13 +210,12 @@ f:GetPropertyChangedSignal("Texture"):Connect(function()
 end)
 
 -- Initial setup
-setupMessageListener()
+task.wait(1)
 
 -- Initial turn (coolcat8520 starts)
 if currentPlayer == "coolcat8520" then
     isMyTurn = true
     -- Process initial flag
-    task.wait(1)
     processFlag()
 end
 
