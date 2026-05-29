@@ -1,32 +1,24 @@
+-- b
 
--- a
 local f = workspace.guessTheFlag.FlagPart.flagDecal
 local fol = workspace.gtfFlags
 
 -- Configuration
 local ALLOWED_USERS = {"coolcat8520", "kamlol18"}
-local currentPlayer = game.Players.LocalPlayer.Name
-local otherPlayer = nil
+local currentUser = game.Players.LocalPlayer.Name
 
--- Determine the other player
-for _, name in pairs(ALLOWED_USERS) do
-    if name ~= currentPlayer then
-        otherPlayer = name
-        break
-    end
+-- Check if user is allowed
+if not table.find(ALLOWED_USERS, currentUser) then
+    error("User not authorized to run this script")
 end
 
--- Only run script if player is allowed
-if not table.find(ALLOWED_USERS, currentPlayer) then
-    return
-end
-
--- State management
-local isMyTurn = (currentPlayer == "coolcat8520") -- coolcat8520 starts
-local waitingForMessage = false
+local otherUser = (currentUser == "coolcat8520") and "kamlol18" or "coolcat8520"
+local isActive = false
+local otherLastTyped = tick()
+local otherListenerActive = false
 
 function find(t)
-    for _, v in pairs(fol:GetChildren()) do
+    for _,v in pairs(fol:GetChildren()) do
         if v:IsA("Decal") and v.Texture == t then
             return v.Name
         end
@@ -34,47 +26,11 @@ function find(t)
     return nil
 end
 
--- Send private message to other player
-function sendPrivateMessage(txt)
+function send(txt)
     local rs = game:GetService("ReplicatedStorage")
     local c = rs:FindFirstChild("DefaultChatSystemChatEvents")
     
-    function retry()
-        if c then
-            local s = c:FindFirstChild("SayMessageRequest")
-            if s then
-                local ok = pcall(function()
-                    s:FireServer(txt, "Whisper", otherPlayer)
-                end)
-                if not ok then
-                    wait(2)
-                    retry()
-                end
-            end
-        else
-            local ts = game:GetService("TextChatService")
-            local ch = ts.TextChannels:FindFirstChild("RBXGeneral")
-            if ch then
-                local ok = pcall(function()
-                    ch:SendAsync("/w " .. otherPlayer .. " " .. txt)
-                end)
-                if not ok then
-                    wait(2)
-                    retry()
-                end
-            end
-        end
-    end
-    
-    retry()
-end
-
--- Send public message (for the country name)
-function sendPublicMessage(txt)
-    local rs = game:GetService("ReplicatedStorage")
-    local c = rs:FindFirstChild("DefaultChatSystemChatEvents")
-    
-    function retry()
+    local function retry()
         if c then
             local s = c:FindFirstChild("SayMessageRequest")
             if s then
@@ -87,8 +43,8 @@ function sendPublicMessage(txt)
                 end
             end
         else
-            local ts = game:GetService("TextChatService")
-            local ch = ts.TextChannels:FindFirstChild("RBXGeneral")
+            local t = game:GetService("TextChatService")
+            local ch = t.TextChannels:FindFirstChild("RBXGeneral")
             if ch then
                 local ok = pcall(function()
                     ch:SendAsync(txt)
@@ -104,124 +60,104 @@ function sendPublicMessage(txt)
     retry()
 end
 
--- Process flag change for current player's turn
-function processFlag()
-    if not isMyTurn then
-        return
+function startGuessing()
+    if isActive then return end
+    isActive = true
+    
+    -- Get initial flag
+    local initialName = find(f.Texture)
+    if initialName then
+        send(string.lower(initialName))
     end
     
-    local tex = f.Texture
-    local countryName = find(tex)
+    -- Main guessing loop
+    f:GetPropertyChangedSignal("Texture"):Connect(function()
+        if isActive then
+            local tex = f.Texture
+            local name = find(tex)
+            if name then
+                send(string.lower(name))
+            end
+        end
+    end)
+end
+
+function stopGuessing()
+    isActive = false
+end
+
+-- Check for cooldown on the other person
+function monitorOtherUser()
+    while true do
+        wait(1) -- Check every second
+        local timeSinceOtherTyped = tick() - otherLastTyped
+        
+        -- If other user hasn't typed in 5 seconds and we're not currently active
+        if timeSinceOtherTyped >= 5 and not isActive and not otherListenerActive then
+            otherListenerActive = true
+            print("Other user cooldown detected, activating guesser...")
+            startGuessing()
+            
+            -- Give the other user time to come back, then deactivate
+            wait(8) -- Let guesser run for 8 seconds
+            stopGuessing()
+            otherListenerActive = false
+        end
+    end
+end
+
+-- Listen for other user's chat messages
+local function setupChatListener()
+    local rs = game:GetService("ReplicatedStorage")
+    local c = rs:FindFirstChild("DefaultChatSystemChatEvents")
     
-    if countryName then
-        -- Say the country name publicly
-        sendPublicMessage(string.lower(countryName))
-        
-        -- Switch turns
-        isMyTurn = false
-        waitingForMessage = false
-        
-        -- Notify other player via private message that it's their turn
-        sendPrivateMessage("YOUR_TURN")
-    end
-end
-
--- Listen for private messages using OnMessageDoneFiltering (most reliable)
-local rs = game:GetService("ReplicatedStorage")
-local chatEvent = rs:FindFirstChild("DefaultChatSystemChatEvents")
-
-if chatEvent then
-    local onMessageEvent = chatEvent:FindFirstChild("OnMessageDoneFiltering")
-    if onMessageEvent then
-        onMessageEvent.OnClientEvent:Connect(function(data)
-            if data and data.FromSpeaker and data.Message then
-                local sender = data.FromSpeaker
-                local msg = data.Message
-                
-                -- Check if message is from other player
-                if sender == otherPlayer then
-                    if msg == "YOUR_TURN" then
-                        -- Other player indicates it's our turn
-                        isMyTurn = true
-                        waitingForMessage = false
-                        -- Immediately check current flag
-                        processFlag()
-                    elseif isMyTurn == false and waitingForMessage == false then
-                        -- We received a country name, wait 1 second then say it
-                        waitingForMessage = true
-                        task.wait(1)
-                        
-                        -- Find current flag name
-                        local tex = f.Texture
-                        local countryName = find(tex)
-                        
-                        if countryName then
-                            sendPublicMessage(string.lower(countryName))
-                            waitingForMessage = false
-                            isMyTurn = false
-                            -- Tell other player it's their turn
-                            sendPrivateMessage("YOUR_TURN")
-                        else
-                            waitingForMessage = false
-                            isMyTurn = true
-                        end
+    if c then
+        local me = c:FindFirstChild("OnMessageDoneFiltering")
+        if me then
+            me.OnClientEvent:Connect(function(data)
+                if data.FromSpeaker == otherUser then
+                    otherLastTyped = tick()
+                    -- If we're currently guessing, stop and let other user take over
+                    if isActive then
+                        stopGuessing()
+                        otherListenerActive = false
+                        print("Other user started typing, stopping guesser...")
                     end
                 end
-            end
-        end)
-    end
-end
-
--- Alternative: Listen for chat using Players.PlayerAdded for whispers
-game:GetService("Players").PlayerAdded:Connect(function(player)
-    if player.Name == otherPlayer then
-        player.Chatted:Connect(function(msg)
-            local sender = player.Name
-            if sender == otherPlayer then
-                if msg == "YOUR_TURN" then
-                    isMyTurn = true
-                    waitingForMessage = false
-                    processFlag()
-                elseif isMyTurn == false and waitingForMessage == false and msg ~= "YOUR_TURN" then
-                    waitingForMessage = true
-                    task.wait(1)
-                    
-                    local tex = f.Texture
-                    local countryName = find(tex)
-                    
-                    if countryName then
-                        sendPublicMessage(string.lower(countryName))
-                        waitingForMessage = false
-                        isMyTurn = false
-                        sendPrivateMessage("YOUR_TURN")
-                    else
-                        waitingForMessage = false
-                        isMyTurn = true
+            end)
+        end
+    else
+        local t = game:GetService("TextChatService")
+        local ch = t.TextChannels:FindFirstChild("RBXGeneral")
+        if ch then
+            ch.MessageReceived:Connect(function(message)
+                if message.TextSource and message.TextSource.Name == otherUser then
+                    otherLastTyped = tick()
+                    if isActive then
+                        stopGuessing()
+                        otherListenerActive = false
+                        print("Other user started typing, stopping guesser...")
                     end
                 end
-            end
-        end)
+            end)
+        end
     end
-end)
-
--- Watch for flag changes
-f:GetPropertyChangedSignal("Texture"):Connect(function()
-    processFlag()
-end)
-
--- Initial setup
-task.wait(1)
-
--- Initial turn (coolcat8520 starts)
-if currentPlayer == "coolcat8520" then
-    isMyTurn = true
-    -- Process initial flag
-    processFlag()
 end
 
-print("Script loaded - Player: " .. currentPlayer .. ", Other: " .. otherPlayer)
-if isMyTurn then
-    print("Your turn!")
-else
-    print("Waiting for other player...")
+-- Initial typing for kamlol18
+if currentUser == "kamlol18" then
+    wait(2) -- Wait a moment for game to load
+    send("a")
+    wait(1) -- Let the message send
+end
+
+-- Start monitoring the other user
+coroutine.wrap(monitorOtherUser)()
+setupChatListener()
+
+-- If you're coolcat8520, start guessing immediately (kamlol18 will start the cycle)
+if currentUser == "coolcat8520" then
+    wait(1)
+    otherLastTyped = tick() + 6 -- Pretend kamlol hasn't typed for 6 seconds
+    wait(5) -- Wait for kamlol's initial message to pass
 end
