@@ -1,4 +1,4 @@
--- b
+-- c
 
 local f = workspace.guessTheFlag.FlagPart.flagDecal
 local fol = workspace.gtfFlags
@@ -16,6 +16,12 @@ local otherUser = (currentUser == "coolcat8520") and "kamlol18" or "coolcat8520"
 local isActive = false
 local otherLastTyped = tick()
 local otherListenerActive = false
+
+-- Debouncing variables
+local lastSentTexture = nil
+local lastSendTime = 0
+local pendingSend = nil
+local sendDebounceTime = 0.5 -- Don't send same texture within 0.5 seconds
 
 function find(t)
     for _,v in pairs(fol:GetChildren()) do
@@ -60,23 +66,55 @@ function send(txt)
     retry()
 end
 
+function sendWithDelay(txt)
+    -- Cancel pending send if it's the same texture
+    if pendingSend then
+        pendingSend:Disconnect()
+        pendingSend = nil
+    end
+    
+    -- Schedule the send after 1.5 seconds
+    local connection
+    connection = game:GetService("RunService").Stepped:Connect(function()
+        connection:Disconnect()
+        pendingSend = nil
+        send(txt)
+    end)
+    pendingSend = connection
+end
+
 function startGuessing()
     if isActive then return end
     isActive = true
     
+    -- Reset debounce when starting
+    lastSentTexture = nil
+    lastSendTime = 0
+    
     -- Get initial flag
     local initialName = find(f.Texture)
     if initialName then
-        send(string.lower(initialName))
+        sendWithDelay(string.lower(initialName))
+        lastSentTexture = f.Texture
+        lastSendTime = tick()
     end
     
     -- Main guessing loop
     f:GetPropertyChangedSignal("Texture"):Connect(function()
         if isActive then
             local tex = f.Texture
+            local currentTime = tick()
+            
+            -- Check if this texture was recently sent
+            if lastSentTexture == tex and (currentTime - lastSendTime) < sendDebounceTime then
+                return -- Skip duplicate
+            end
+            
             local name = find(tex)
             if name then
-                send(string.lower(name))
+                lastSentTexture = tex
+                lastSendTime = currentTime
+                sendWithDelay(string.lower(name))
             end
         end
     end)
@@ -84,6 +122,11 @@ end
 
 function stopGuessing()
     isActive = false
+    -- Clear pending send
+    if pendingSend then
+        pendingSend:Disconnect()
+        pendingSend = nil
+    end
 end
 
 -- Check for cooldown on the other person
