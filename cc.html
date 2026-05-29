@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>call · counter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none; /* prevent accidental text selection on double-tap, but keeps readability */
+        }
+
+        body {
+            background-color: #000000;   /* true amoled black */
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Roboto Mono', 'Menlo', monospace;
+            font-weight: 500;
+            padding: 1.5rem;
+        }
+
+        /* main container – full centering, no extra decoration */
+        .timer-wrapper {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        /* gigantic, crisp monospace timer */
+        .countdown {
+            color: #FFFFFF;
+            background: transparent;
+            font-size: clamp(2.8rem, 15vw, 9rem);
+            letter-spacing: 0.02em;
+            line-height: 1.2;
+            font-weight: 550;
+            text-shadow: none;
+            word-break: break-word;
+            white-space: normal;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: baseline;
+            gap: 0.2em 0.5em;
+        }
+
+        /* each time unit block: remains minimal but readable */
+        .time-block {
+            display: inline-flex;
+            flex-wrap: nowrap;
+            align-items: baseline;
+            gap: 0.1em;
+            background: transparent;
+        }
+
+        .number {
+            font-weight: 600;
+            font-feature-settings: "tnum";
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0;
+        }
+
+        .label {
+            font-size: 0.32em;
+            font-weight: 450;
+            letter-spacing: 0.04em;
+            text-transform: lowercase;
+            opacity: 0.7;
+            margin-left: 0.2em;
+        }
+
+        /* optional small spacer after each unit (except last) – barely visible but keeps structure */
+        .sep-hide {
+            display: none;
+        }
+
+        /* on extremely narrow screens, allow wrapping with decent spacing */
+        @media (max-width: 550px) {
+            .countdown {
+                gap: 0.4rem 1rem;
+            }
+            .label {
+                font-size: 0.28em;
+            }
+        }
+
+        /* no footer, no watermark, nothing – pure amoled black & big text */
+    </style>
+</head>
+<body>
+<div class="timer-wrapper">
+    <div class="countdown" id="liveTimer">
+        <!-- dynamic content injected via js: days, hours, minutes, seconds -->
+    </div>
+</div>
+
+<script>
+    (function() {
+        // target Unix timestamp (seconds since 1970-01-01 UTC)
+        const TARGET_EPOCH = 1780003342;   // given fixed timestamp
+
+        // helper: safely get current time in UTC seconds (unix epoch)
+        function getCurrentUnixSeconds() {
+            return Math.floor(Date.now() / 1000);
+        }
+
+        // compute delta = current - target (positive because target is in the past)
+        function computeDeltaSeconds(nowSeconds) {
+            return nowSeconds - TARGET_EPOCH;
+        }
+
+        // convert total seconds into days, hours, minutes, seconds
+        function breakdownDuration(totalSec) {
+            if (totalSec < 0) {
+                // edge case: if for some miraculous reason the timestamp is in the future (should not happen)
+                // but we treat as zero elapsed to avoid negative display.
+                return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+            }
+            const secondsInMinute = 60;
+            const secondsInHour = 3600;
+            const secondsInDay = 86400;
+
+            const days = Math.floor(totalSec / secondsInDay);
+            const remainderAfterDays = totalSec % secondsInDay;
+            const hours = Math.floor(remainderAfterDays / secondsInHour);
+            const remainderAfterHours = remainderAfterDays % secondsInHour;
+            const minutes = Math.floor(remainderAfterHours / secondsInMinute);
+            const seconds = remainderAfterHours % secondsInMinute;
+
+            return { days, hours, minutes, seconds };
+        }
+
+        // format number with leading zeros (for hours, mins, secs) – days shown without extra zeros
+        function formatTwoDigits(num) {
+            return num < 10 ? '0' + num : String(num);
+        }
+
+        // main render: build clean, very readable large layout
+        function renderTimer() {
+            const nowSec = getCurrentUnixSeconds();
+            const elapsedSec = computeDeltaSeconds(nowSec);
+            const { days, hours, minutes, seconds } = breakdownDuration(elapsedSec);
+
+            // Create DOM elements directly for simplicity and best performance
+            const timerContainer = document.getElementById('liveTimer');
+            if (!timerContainer) return;
+
+            // Clear container
+            timerContainer.innerHTML = '';
+
+            // ---- days block ----
+            const daysBlock = document.createElement('div');
+            daysBlock.className = 'time-block';
+            const daysNumberSpan = document.createElement('span');
+            daysNumberSpan.className = 'number';
+            daysNumberSpan.textContent = String(days);
+            const daysLabelSpan = document.createElement('span');
+            daysLabelSpan.className = 'label';
+            daysLabelSpan.textContent = days === 1 ? 'day' : 'days';
+            daysBlock.appendChild(daysNumberSpan);
+            daysBlock.appendChild(daysLabelSpan);
+            timerContainer.appendChild(daysBlock);
+
+            // ---- hours block (with leading zero) ----
+            const hoursBlock = document.createElement('div');
+            hoursBlock.className = 'time-block';
+            const hoursNumberSpan = document.createElement('span');
+            hoursNumberSpan.className = 'number';
+            hoursNumberSpan.textContent = formatTwoDigits(hours);
+            const hoursLabelSpan = document.createElement('span');
+            hoursLabelSpan.className = 'label';
+            hoursLabelSpan.textContent = hours === 1 ? 'hour' : 'hours';
+            hoursBlock.appendChild(hoursNumberSpan);
+            hoursBlock.appendChild(hoursLabelSpan);
+            timerContainer.appendChild(hoursBlock);
+
+            // ---- minutes block ----
+            const minutesBlock = document.createElement('div');
+            minutesBlock.className = 'time-block';
+            const minutesNumberSpan = document.createElement('span');
+            minutesNumberSpan.className = 'number';
+            minutesNumberSpan.textContent = formatTwoDigits(minutes);
+            const minutesLabelSpan = document.createElement('span');
+            minutesLabelSpan.className = 'label';
+            minutesLabelSpan.textContent = minutes === 1 ? 'minute' : 'minutes';
+            minutesBlock.appendChild(minutesNumberSpan);
+            minutesBlock.appendChild(minutesLabelSpan);
+            timerContainer.appendChild(minutesBlock);
+
+            // ---- seconds block ----
+            const secondsBlock = document.createElement('div');
+            secondsBlock.className = 'time-block';
+            const secondsNumberSpan = document.createElement('span');
+            secondsNumberSpan.className = 'number';
+            secondsNumberSpan.textContent = formatTwoDigits(seconds);
+            const secondsLabelSpan = document.createElement('span');
+            secondsLabelSpan.className = 'label';
+            secondsLabelSpan.textContent = seconds === 1 ? 'second' : 'seconds';
+            secondsBlock.appendChild(secondsNumberSpan);
+            secondsBlock.appendChild(secondsLabelSpan);
+            timerContainer.appendChild(secondsBlock);
+        }
+
+        // ensure live update every second (synchronized with system clock)
+        let animationFrameId = null;
+        let lastTimestamp = 0;
+
+        function updateLoop() {
+            renderTimer();
+            // schedule next update after aiming for next full second boundary to reduce drift
+            const now = Date.now();
+            const delayMs = 1000 - (now % 1000);
+            setTimeout(() => {
+                // recursive but stable: re-schedule next after each render
+                updateLoop();
+            }, delayMs);
+        }
+
+        // also initial render immediately
+        renderTimer();
+
+        // start the smooth periodic update (approx once per second)
+        // to avoid accumulating timers, we simply use recursive setTimeout with dynamic delay
+        // ensure that even if tab sleeps, when it wakes it will catch up.
+        let activeTimeout = null;
+        function scheduleNext() {
+            const nowMs = Date.now();
+            const nextTick = 1000 - (nowMs % 1000);
+            activeTimeout = setTimeout(() => {
+                renderTimer();
+                scheduleNext();
+            }, nextTick);
+        }
+        // clear previous if any (on potential hot reloads / but fine)
+        if (activeTimeout) clearTimeout(activeTimeout);
+        scheduleNext();
+
+        // additional safety: re-render on visibility change (when tab becomes active, correct time)
+        function onVisibilityChange() {
+            if (!document.hidden) {
+                renderTimer();
+            }
+        }
+        document.addEventListener('visibilitychange', onVisibilityChange);
+
+        // optional: clean up on page unload (good practice)
+        window.addEventListener('beforeunload', () => {
+            if (activeTimeout) clearTimeout(activeTimeout);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+        });
+    })();
+</script>
+</body>
+</html>
